@@ -218,9 +218,11 @@ if(BUILD_REMASTERRA)
 endif()
 
 if(BUILD_VANILLARA)
+if (NOT ANDROID)
     include(BuildIcons)
     # Create the custom command for generating the ico file for windows.
     make_icon(INPUT "${CMAKE_SOURCE_DIR}/resources/vanillara_icon.svg" OUTPUT VANILLARA_ICON)
+endif ()
 
     if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
         # Generate windows version info.
@@ -238,10 +240,14 @@ if(BUILD_VANILLARA)
         )
     endif()
 
+if (NOT ANDROID)
     # A target must include the icon for the custom command to run.
     add_executable(VanillaRA ${REDALERT_SRC} ${REDALERT_NET_SRC} ${REDALERT_HEADERS} ${VANILLARA_RC} ${VANILLARA_ICON})
+else ()
+    add_library(VanillaRA SHARED ${REDALERT_SRC} ${REDALERT_NET_SRC} ${REDALERT_HEADERS} ${VANILLARA_RC})
+endif ()
 
-    if(MAKE_BUNDLE)
+if(MAKE_BUNDLE)
         set_source_files_properties(${VANILLARA_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         set_target_properties(VanillaRA PROPERTIES
             MACOSX_BUNDLE True

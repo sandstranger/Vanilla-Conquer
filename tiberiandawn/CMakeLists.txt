@@ -194,9 +194,11 @@ if(BUILD_REMASTERTD)
 endif()
 
 if(BUILD_VANILLATD)
+if (NOT ANDROID)
     include(BuildIcons)
     # Create the custom command for generating the ico/icns files for display in the OS.
     make_icon(INPUT "${CMAKE_SOURCE_DIR}/resources/vanillatd_icon.svg" OUTPUT VANILLATD_ICON)
+endif ()
 
     if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
         # Generate windows version info.
@@ -214,10 +216,14 @@ if(BUILD_VANILLATD)
         )
     endif()
 
+if (NOT ANDROID)
     # A target must include the icon for the custom command to run.
     add_executable(VanillaTD ${TIBDAWN_SRC} ${TIBDAWN_NET_SRC} ${TIBDAWN_HEADERS} ${VANILLATD_RC} ${VANILLATD_ICON})
+else ()
+    add_library(VanillaTD SHARED ${TIBDAWN_SRC} ${TIBDAWN_NET_SRC} ${TIBDAWN_HEADERS} ${VANILLATD_RC})
+endif ()
 
-    if(MAKE_BUNDLE)
+if(MAKE_BUNDLE)
         set_source_files_properties(${VANILLATD_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         set_target_properties(VanillaTD PROPERTIES
             MACOSX_BUNDLE True

@@ -9,7 +9,11 @@ foreach(_path_elem $ENV{CMAKE_FIND_ROOT_PATH})
     endif()
 endforeach()
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+if (ANDROID)
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+else ()
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+endif ()
 include(FeatureSummary)
 include(CheckCXXCompilerFlag)
 
@@ -81,7 +85,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 include(Compilers)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_FIND_FRAMEWORK "LAST")
 
@@ -152,10 +156,18 @@ if(SDL2)
     set(DDRAW OFF)
 endif()
 
+if (ANDROID)
+    include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
+    add_compile_options(-fno-lto)
+endif()
+
 if(OPENAL)
     find_package(OpenAL REQUIRED)
     list(APPEND VANILLA_LIBS OpenAL::OpenAL)
     set(DSOUND OFF)
+if (ANDROID)
+    include_directories(${OPENAL_INCLUDE_DIR}/AL)
+endif ()
 endif()
 
 if(BUILD_TESTS)
