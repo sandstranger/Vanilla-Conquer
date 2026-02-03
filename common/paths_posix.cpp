@@ -34,12 +34,28 @@
 #endif
 #include <inttypes.h>
 
+#if ANDROID
+#include <string>
+
+using namespace std;
+static string g_pathToConfigsDirectory;
+#endif
+
 #if defined(__APPLE__)
 #define _DARWIN_BETTER_REALPATH
 #include <mach-o/dyld.h>
 #include <TargetConditionals.h>
 #elif defined(__DragonFly__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__)
 #include <sys/sysctl.h>
+#endif
+
+#if ANDROID
+extern "C"{
+__attribute__((used)) __attribute__((visibility("default")))
+void setPathToConfigsDirectory (const char *pathToConfigsDirectory) {
+    g_pathToConfigsDirectory = pathToConfigsDirectory;
+}
+}
 #endif
 
 namespace
@@ -199,6 +215,8 @@ const char* PathsClass::User_Path()
     if (UserPath.empty()) {
 #ifdef __APPLE__
         UserPath = User_Home() + "/Library/Application Support/Vanilla-Conquer";
+#elif ANDROID
+        UserPath = g_pathToConfigsDirectory;
 #else
         UserPath = Get_Posix_Default("XDG_CONFIG_HOME", ".config") + "/vanilla-conquer";
 #endif
