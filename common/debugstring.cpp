@@ -9,6 +9,10 @@
 #include <io.h>
 #endif
 
+#if ANDROID
+#include <android/log.h>
+#endif
+
 static class DebugStateClass
 {
 public:
@@ -52,9 +56,9 @@ public:
  */
 void Debug_String_Log(unsigned level, const char* file, int line, const char* fmt, ...)
 {
-    static const char* levels[] = {"NONE", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"};
     assert(level <= 6);
-
+#ifndef ANDROID
+    static const char* levels[] = {"NONE", "FATAL", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"};
     /* If we have a file pointer set we are logging to a file */
     if (DebugState.File != nullptr) {
         va_list args;
@@ -74,6 +78,22 @@ void Debug_String_Log(unsigned level, const char* file, int line, const char* fm
     fprintf(stderr, "\n");
     va_end(args);
     fflush(stderr);
+#else
+    static const int android_levels[] = {
+            ANDROID_LOG_UNKNOWN, // NONE
+            ANDROID_LOG_FATAL,   // FATAL
+            ANDROID_LOG_ERROR,   // ERROR
+            ANDROID_LOG_WARN,    // WARN
+            ANDROID_LOG_INFO,    // INFO
+            ANDROID_LOG_DEBUG,   // DEBUG
+            ANDROID_LOG_VERBOSE  // TRACE
+    };
+    const char* TAG = "VanillaConquer";
+    va_list args;
+    va_start(args, fmt);
+    __android_log_vprint(android_levels[level], TAG, fmt, args);
+    va_end(args);
+#endif
 }
 
 void Debug_String_File(const char* file)
