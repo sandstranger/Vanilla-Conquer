@@ -83,6 +83,7 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
 
             Put_Mouse_Message(key, x, y, event.type == SDL_MOUSEBUTTONDOWN ? false : true);
         } break;
+#ifndef ANDROID
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
             case SDL_WINDOWEVENT_EXPOSED:
@@ -97,6 +98,7 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 break;
             }
             break;
+#endif
         case SDL_MOUSEWHEEL:
             if (event.wheel.y > 0) { // scroll up
                 Put_Key_Message(VK_MOUSEWHEEL_UP, false);
@@ -104,6 +106,7 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 Put_Key_Message(VK_MOUSEWHEEL_DOWN, false);
             }
             break;
+#ifndef ANDROID
         case SDL_CONTROLLERDEVICEREMOVED:
             if (GameController != nullptr) {
                 const SDL_GameController* removedController = SDL_GameControllerFromInstanceID(event.jdevice.which);
@@ -118,6 +121,16 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 GameController = SDL_GameControllerOpen(event.jdevice.which);
             }
             break;
+#else
+            case SDL_JOYDEVICEADDED:
+            case SDL_JOYDEVICEREMOVED:
+            case SDL_CONTROLLERDEVICEADDED:
+            case SDL_CONTROLLERDEVICEREMOVED:
+            case SDL_CONTROLLERDEVICEREMAPPED:
+                Close_Controller();
+                Open_Controller();
+                break;
+#endif
         case SDL_CONTROLLERAXISMOTION:
             Handle_Controller_Axis_Event(event.caxis);
             break;
@@ -139,11 +152,38 @@ bool WWKeyboardClassSDL2::Is_Gamepad_Active()
 
 void WWKeyboardClassSDL2::Open_Controller()
 {
+#ifndef ANDROID
     for (int i = 0; i < SDL_NumJoysticks(); ++i) {
         if (SDL_IsGameController(i)) {
             GameController = SDL_GameControllerOpen(i);
         }
     }
+#else
+    SDL_GameControllerUpdate();
+
+    const int numJoysticks = SDL_NumJoysticks();
+    int virtualControllerIndex = -1;
+
+    for (int i = 0; i < numJoysticks; i++) {
+        if(SDL_JoystickIsVirtual(i)){
+            virtualControllerIndex = i;
+            break;
+        }
+    }
+
+    for (int joyIdx = 0; joyIdx < numJoysticks; ++joyIdx) {
+        if (virtualControllerIndex!=-1 && joyIdx!=virtualControllerIndex){
+            continue;
+        }
+        if (SDL_IsGameController(joyIdx)) {
+            GameController = SDL_GameControllerOpen(joyIdx);
+            if (GameController != nullptr) {
+                break;
+            }
+        }
+    }
+
+#endif
 }
 
 void WWKeyboardClassSDL2::Close_Controller()

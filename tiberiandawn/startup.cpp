@@ -51,6 +51,13 @@ HINSTANCE ProgramInstance;
 #else
 #include <unistd.h>
 #endif
+#if ANDROID
+#include "SDL_main.h"
+#include <string>
+
+using namespace std;
+static string g_pathToResources;
+#endif
 
 extern int ReadyToQuit;
 void Read_Setup_Options(RawFileClass* config_file);
@@ -198,7 +205,11 @@ int DLL_Startup(const char* command_line_in)
 }
 #endif // REMASTER_BUILD
 
+#ifdef ANDROID
+int SDL_main(int argc, char **argv)
+#else
 int main(int argc, char** argv)
+#endif
 {
     UtfArgs args(argc, argv);
     CCDebugString("C&C95 - Starting up.\n");
@@ -208,7 +219,7 @@ int main(int argc, char** argv)
         printf("Zuwenig Hauptspeicher verf?gbar.\n");
 #else
 #ifdef FRENCH
-        printf("M‚moire vive (RAM) insuffisante.\n");
+        printf("Mï¿½moire vive (RAM) insuffisante.\n");
 #else
         printf("Insufficient RAM available.\n");
 #endif
@@ -219,7 +230,9 @@ int main(int argc, char** argv)
 #ifdef JAPANESE
     ForceEnglish = false;
 #endif
-
+#if ANDROID
+    chdir(g_pathToResources.c_str());
+#endif
     /*
     **	Remember the current working directory and drive.
     */
@@ -612,3 +625,34 @@ void Read_Setup_Options(RawFileClass* config_file)
     VideoBackBufferAllowed = ini.Get_Bool("Options", "VideoBackBuffer", true);
     AllowHardwareBlitFills = ini.Get_Bool("Options", "HardwareFills", true);
 }
+
+#if ANDROID
+extern void Focus_Restore(void);
+extern void Focus_Loss(void);
+extern "C"{
+__attribute__((used)) __attribute__((visibility("default")))
+void onNativeResume() {
+    Focus_Restore();
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void onNativePause() {
+    Focus_Loss();
+}
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToShowScreenControls() {
+    return true;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToInvokeMouseButtonsEvents(){
+    return true;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToReInitGameControllers (){
+    return false;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setPathToResources (const char *pathToResource) {
+    g_pathToResources = pathToResource;
+}
+}
+#endif

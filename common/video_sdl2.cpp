@@ -47,6 +47,14 @@
 
 #include <SDL.h>
 
+#if ANDROID
+#include <string>
+using namespace std;
+
+static string g_pathToSDLControllerDB;
+static bool g_useGLES2_0 = false;
+#endif
+
 extern WWKeyboardClass* Keyboard;
 static SDL_Window* window;
 static SDL_Renderer* renderer;
@@ -118,6 +126,19 @@ Uint32 SettingsPixelFormat()
 }
 
 static void Update_HWCursor();
+
+#if ANDROID
+extern "C" {
+__attribute__((used)) __attribute__((visibility("default")))
+void setUseGLES2_0State(const bool useGLES2_0) {
+    g_useGLES2_0 = useGLES2_0;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setPathToSDLControllerDB (const char *pathToSDLControllerDB){
+    g_pathToSDLControllerDB = pathToSDLControllerDB;
+}
+}
+#endif
 
 static void Update_HWCursor_Settings()
 {
@@ -223,7 +244,7 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     int win_h = h;
     int win_flags = 0;
     Uint32 requested_pixel_format = SettingsPixelFormat();
-
+#ifndef ANDROID
     if (!Settings.Video.Windowed) {
         /*
         ** Native fullscreen if no proper width and height set.
@@ -247,6 +268,17 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
 
     window =
         SDL_CreateWindow("Vanilla Conquer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, win_w, win_h, win_flags);
+#else
+    win_w = Settings.Video.Width = 0;
+    win_h = Settings.Video.Height = 0;
+    win_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_OPENGL;
+    SDL_Log(g_useGLES2_0 ? "Legacy OpenGL ES 2.0 is using for rendering" :
+            "OpenGL ES 3.2 is using for rendering");
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, g_useGLES2_0 ? 2 : 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, g_useGLES2_0 ? 0 : 2);
+    window = SDL_CreateWindow("Vanilla Conquer", 0, 0, win_w, 0, win_flags);
+#endif
     if (window == nullptr) {
         DBG_ERROR("SDL_CreateWindow failed: %s", SDL_GetError());
         Reset_Video_Mode();
@@ -279,7 +311,12 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
         }
     }
 
+#ifndef ANDROID
     renderer = SDL_CreateRenderer(window, renderer_index, SDL_RENDERER_TARGETTEXTURE);
+#else
+    renderer = SDL_CreateRenderer(window, renderer_index,
+                                  SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED);
+#endif
     if (renderer == nullptr) {
         DBG_ERROR("SDL_CreateRenderer failed: %s", SDL_GetError());
         Reset_Video_Mode();
@@ -352,11 +389,39 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     hwcursor.Y = h / 2;
     Update_HWCursor_Settings();
 
+#ifdef ANDROID
+    SDL_SetHint(SDL_HINT_TV_REMOTE_AS_JOYSTICK, "0");
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+    SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_RAWINPUT_CORRELATE_XINPUT, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS3, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAMDECK, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_WII, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_COMBINE_JOY_CONS, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_STEAM, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_GAMECUBE, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
+#endif
+
     /*
     ** Init gamepad.
     */
     if (Settings.Mouse.ControllerEnabled) {
-        SDL_Init(SDL_INIT_GAMECONTROLLER);
+        SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
+#ifdef ANDROID
+        const auto pathToSdl2ControllerDb = g_pathToSDLControllerDB.c_str();
+        if (SDL_GameControllerAddMappingsFromFile(pathToSdl2ControllerDb) < 0) {
+            SDL_Log("Couldn't load mappings: %s\n", SDL_GetError());
+        } else{
+            SDL_Log("Custom controller db was loaded from: %s", pathToSdl2ControllerDb);
+        }
+#endif
         Keyboard->Open_Controller();
     }
 
@@ -365,6 +430,7 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
 
 void Toggle_Video_Fullscreen()
 {
+#ifndef ANDROID
     Settings.Video.Windowed = !Settings.Video.Windowed;
 
     if (!Settings.Video.Windowed) {
@@ -380,6 +446,7 @@ void Toggle_Video_Fullscreen()
     }
 
     Update_HWCursor_Settings();
+#endif
 }
 
 void Get_Video_Scale(float& x, float& y)
