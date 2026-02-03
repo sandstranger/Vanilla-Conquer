@@ -277,7 +277,7 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, g_useGLES2_0 ? 2 : 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, g_useGLES2_0 ? 0 : 2);
-    window = SDL_CreateWindow("Vanilla Conquer", 0, 0, win_w, 0, win_flags);
+    window = SDL_CreateWindow("Vanilla Conquer", 0, 0, 0, 0, win_flags);
 #endif
     if (window == nullptr) {
         DBG_ERROR("SDL_CreateWindow failed: %s", SDL_GetError());
@@ -315,7 +315,7 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     renderer = SDL_CreateRenderer(window, renderer_index, SDL_RENDERER_TARGETTEXTURE);
 #else
     renderer = SDL_CreateRenderer(window, renderer_index,
-                                  SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED);
+                                  SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 #endif
     if (renderer == nullptr) {
         DBG_ERROR("SDL_CreateRenderer failed: %s", SDL_GetError());
@@ -413,14 +413,16 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     ** Init gamepad.
     */
     if (Settings.Mouse.ControllerEnabled) {
-        SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
 #ifdef ANDROID
+        SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
         const auto pathToSdl2ControllerDb = g_pathToSDLControllerDB.c_str();
         if (SDL_GameControllerAddMappingsFromFile(pathToSdl2ControllerDb) < 0) {
             SDL_Log("Couldn't load mappings: %s\n", SDL_GetError());
         } else{
             SDL_Log("Custom controller db was loaded from: %s", pathToSdl2ControllerDb);
         }
+#else
+        SDL_Init(SDL_INIT_GAMECONTROLLER);
 #endif
         Keyboard->Open_Controller();
     }

@@ -59,6 +59,15 @@ HINSTANCE ProgramInstance;
 #else
 #include <unistd.h>
 #endif
+
+#if ANDROID
+#include "SDL_main.h"
+#include <string>
+
+using namespace std;
+static string g_pathToResources;
+#endif
+
 extern bool RA95AlreadyRunning;
 void Check_Use_Compressed_Shapes(void);
 void Read_Setup_Options(RawFileClass* config_file);
@@ -275,8 +284,15 @@ int DLL_Startup(const char* command_line_in)
 }
 #endif //REMASTER_BUILD
 
+#ifdef ANDROID
+int SDL_main(int argc, char **argv)
+#else
 int main(int argc, char* argv[])
+#endif
 {
+#if ANDROID
+    chdir(g_pathToResources.c_str());
+#endif
     UtfArgs args(argc, argv);
     WWDebugString("RA95 - Starting up.\n");
 
@@ -766,3 +782,34 @@ void Get_OS_Version(void)
     }
 #endif //(0)
 }
+
+#if ANDROID
+extern void Focus_Restore(void);
+extern void Focus_Loss(void);
+extern "C"{
+__attribute__((used)) __attribute__((visibility("default")))
+void onNativeResume() {
+    Focus_Restore();
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void onNativePause() {
+    Focus_Loss();
+}
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToShowScreenControls() {
+    return true;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToInvokeMouseButtonsEvents(){
+    return true;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+bool needToReInitGameControllers (){
+    return false;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setPathToResources (const char *pathToResource) {
+    g_pathToResources = pathToResource;
+}
+}
+#endif

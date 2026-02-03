@@ -44,7 +44,11 @@ void SettingsClass::Load(INIClass& ini)
     */
     Mouse.RawInput = ini.Get_Bool("Mouse", "RawInput", Mouse.RawInput);
     Mouse.Sensitivity = ini.Get_Int("Mouse", "Sensitivity", Mouse.Sensitivity);
+#ifndef ANDROID
     Mouse.ControllerEnabled = ini.Get_Bool("Mouse", "ControllerEnabled", Mouse.ControllerEnabled);
+#else
+    Mouse.ControllerEnabled = true;
+#endif
     Mouse.ControllerPointerSpeed = ini.Get_Int("Mouse", "ControllerPointerSpeed", Mouse.ControllerPointerSpeed);
     /*
     ** Compatibility with CNCNet configuration for this feature

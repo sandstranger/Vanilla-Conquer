@@ -211,6 +211,9 @@ int SDL_main(int argc, char **argv)
 int main(int argc, char** argv)
 #endif
 {
+#if ANDROID
+    chdir(g_pathToResources.c_str());
+#endif
     UtfArgs args(argc, argv);
     CCDebugString("C&C95 - Starting up.\n");
 
@@ -230,9 +233,7 @@ int main(int argc, char** argv)
 #ifdef JAPANESE
     ForceEnglish = false;
 #endif
-#if ANDROID
-    chdir(g_pathToResources.c_str());
-#endif
+
     /*
     **	Remember the current working directory and drive.
     */
