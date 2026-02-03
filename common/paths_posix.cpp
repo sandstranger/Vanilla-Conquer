@@ -65,9 +65,12 @@ namespace
         static std::string _path;
 
         if (_path.empty()) {
+#if ANDROID
+            _path = g_pathToConfigsDirectory;
+#else
             int uid = getuid();
             const char* home_env = std::getenv("HOME");
-
+            
             if (home_env) {
                 _path = home_env;
             } else if (uid == 0) {
@@ -100,6 +103,7 @@ namespace
                 _path = tmp;
             }
         }
+#endif
 
         return _path;
     }
