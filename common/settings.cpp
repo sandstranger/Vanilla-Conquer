@@ -5,6 +5,22 @@
 
 SettingsClass Settings;
 
+#if ANDROID
+static bool g_useDosMode = true;
+static int g_frameRateLimit = 120;
+
+extern "C" {
+__attribute__((used)) __attribute__((visibility("default")))
+void setUseDoseModeState(const bool useDosMode) {
+    g_useDosMode = useDosMode;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setFrameRateLimit(const int frameRateLimit) {
+    g_frameRateLimit = frameRateLimit;
+}
+}
+#endif
+
 SettingsClass::SettingsClass()
 {
     /*
@@ -70,9 +86,15 @@ void SettingsClass::Load(INIClass& ini)
     Video.BoxingAspectRatio = ini.Get_String("Video", "BoxingAspectRatio", Video.BoxingAspectRatio);
     Video.Width = ini.Get_Int("Video", "Width", Video.Width);
     Video.Height = ini.Get_Int("Video", "Height", Video.Height);
+#ifndef ANDROID
     Video.FrameLimit = ini.Get_Int("Video", "FrameLimit", Video.FrameLimit);
     Video.HardwareCursor = ini.Get_Bool("Video", "HardwareCursor", Video.HardwareCursor);
     Video.DOSMode = ini.Get_Bool("Video", "DOSMode", Video.DOSMode);
+#else
+    Video.FrameLimit = g_frameRateLimit;
+    Video.HardwareCursor = false;
+    Video.DOSMode = g_useDosMode;
+#endif
     Video.Scaler = ini.Get_String("Video", "Scaler", Video.Scaler);
     Video.Driver = ini.Get_String("Video", "Driver", Video.Driver);
     Video.PixelFormat = ini.Get_String("Video", "PixelFormat", Video.PixelFormat);

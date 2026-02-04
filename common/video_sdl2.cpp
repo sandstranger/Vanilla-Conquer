@@ -53,6 +53,7 @@ using namespace std;
 
 static string g_pathToSDLControllerDB;
 static bool g_useGLES2_0 = false;
+static bool g_enableVsync = true;
 #endif
 
 extern WWKeyboardClass* Keyboard;
@@ -136,6 +137,10 @@ void setUseGLES2_0State(const bool useGLES2_0) {
 __attribute__((used)) __attribute__((visibility("default")))
 void setPathToSDLControllerDB (const char *pathToSDLControllerDB){
     g_pathToSDLControllerDB = pathToSDLControllerDB;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setEnableVsyncState (const bool enableVsync){
+    g_enableVsync = enableVsync;
 }
 }
 #endif
@@ -318,8 +323,13 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
 #ifndef ANDROID
     renderer = SDL_CreateRenderer(window, renderer_index, SDL_RENDERER_TARGETTEXTURE);
 #else
-    renderer = SDL_CreateRenderer(window, renderer_index,
-                                  SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    int renderFlags = SDL_RENDERER_TARGETTEXTURE | SDL_RENDERER_ACCELERATED;
+
+    if (g_enableVsync) {
+        renderFlags |= SDL_RENDERER_PRESENTVSYNC;
+    }
+
+    renderer = SDL_CreateRenderer(window, renderer_index,renderFlags);
 #endif
     if (renderer == nullptr) {
         DBG_ERROR("SDL_CreateRenderer failed: %s", SDL_GetError());
