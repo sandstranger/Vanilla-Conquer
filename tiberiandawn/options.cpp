@@ -574,11 +574,7 @@ void OptionsClass::Load_Settings(void)
     **	Read in the Options values
     */
     static char const* const OPTIONS = "Options";
-#ifndef ANDROID
     GameSpeed = ini.Get_Int(OPTIONS, "GameSpeed", 4);
-#else
-    GameSpeed = g_gameSpeed;
-#endif
     ScrollRate = ini.Get_Int(OPTIONS, "ScrollRate", 4);
     Set_Brightness(ini.Get_Int(OPTIONS, "Brightness", 0x80));
     Set_Sound_Volume(ini.Get_Int(OPTIONS, "Volume", 0xA0), false);
