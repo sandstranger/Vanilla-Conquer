@@ -69,7 +69,9 @@ void Toggle_Video_Fullscreen();
 void Reset_Video_Mode();
 unsigned Get_Free_Video_Memory();
 void Wait_Blit();
-
+#if ANDROID
+void Update_HWCursor_Settings();
+#endif
 /*
 ** Set desired cursor image in game palette.
 */

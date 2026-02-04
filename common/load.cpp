@@ -227,6 +227,13 @@ unsigned int Load_Uncompress(char const* file, BufferClass& uncomp_buff, BufferC
     /*======================================================================*/
 
     fd = Open_File(file, READ);       // Open up the file to read from
+
+#if ANDROID
+    if (fd < 0) {
+        return 0;
+    }
+#endif
+
     Read_File(fd, (char*)&tmp16, 2L); // Read the file size
     Read_File(fd, uncomp_ptr, 8L);    // Read the header bytes in.
 

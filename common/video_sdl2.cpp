@@ -140,7 +140,11 @@ void setPathToSDLControllerDB (const char *pathToSDLControllerDB){
 }
 #endif
 
+#ifndef ANDROID
 static void Update_HWCursor_Settings()
+#else
+void Update_HWCursor_Settings()
+#endif
 {
     /*
     ** Update mouse scaling settings.

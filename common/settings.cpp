@@ -62,7 +62,11 @@ void SettingsClass::Load(INIClass& ini)
     Video.WindowWidth = ini.Get_Int("Video", "WindowWidth", Video.WindowWidth);
     Video.WindowHeight = ini.Get_Int("Video", "WindowHeight", Video.WindowHeight);
     Video.Windowed = ini.Get_Bool("Video", "Windowed", Video.Windowed);
+#ifndef ANDROID
     Video.Boxing = ini.Get_Bool("Video", "Boxing", Video.Boxing);
+#else
+    Video.Boxing = false;
+#endif
     Video.BoxingAspectRatio = ini.Get_String("Video", "BoxingAspectRatio", Video.BoxingAspectRatio);
     Video.Width = ini.Get_Int("Video", "Width", Video.Width);
     Video.Height = ini.Get_Int("Video", "Height", Video.Height);
