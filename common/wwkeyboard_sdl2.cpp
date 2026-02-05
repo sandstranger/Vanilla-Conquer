@@ -21,6 +21,10 @@
 #include <cmath>
 #include <SDL.h>
 
+#if ANDROID
+static bool touchIsActive = false;
+#endif
+
 void Focus_Loss();
 void Focus_Restore();
 void Process_Network();
@@ -42,7 +46,6 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
             Update_HWCursor_Settings();
         }
 #endif
-
         unsigned short key;
         switch (event.type) {
         case SDL_QUIT:
@@ -59,12 +62,17 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
             }
             break;
         case SDL_MOUSEMOTION:
+#if ANDROID
+            touchIsActive = event.motion.which == SDL_TOUCH_MOUSEID;
+#endif
             Move_Video_Mouse(static_cast<float>(event.motion.xrel), static_cast<float>(event.motion.yrel));
             break;
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP: {
             int x, y;
-
+#if ANDROID
+            touchIsActive = event.motion.which == SDL_TOUCH_MOUSEID;
+#endif
             switch (event.button.button) {
             case SDL_BUTTON_LEFT:
             default:
@@ -109,7 +117,10 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
             break;
 #endif
         case SDL_MOUSEWHEEL:
-            if (event.wheel.y > 0) { // scroll up
+#if ANDROID
+                touchIsActive = event.motion.which == SDL_TOUCH_MOUSEID;
+#endif
+                if (event.wheel.y > 0) { // scroll up
                 Put_Key_Message(VK_MOUSEWHEEL_UP, false);
             } else if (event.wheel.y < 0) { // scroll down
                 Put_Key_Message(VK_MOUSEWHEEL_DOWN, false);
@@ -141,10 +152,16 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 break;
 #endif
         case SDL_CONTROLLERAXISMOTION:
+#if ANDROID
+            touchIsActive = false;
+#endif
             Handle_Controller_Axis_Event(event.caxis);
             break;
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
+#if ANDROID
+            touchIsActive = false;
+#endif
             Handle_Controller_Button_Event(event.cbutton);
             break;
         }
@@ -156,7 +173,11 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
 
 bool WWKeyboardClassSDL2::Is_Gamepad_Active()
 {
+#ifndef ANDROID
     return GameController != nullptr;
+#else
+    return GameController != nullptr && !touchIsActive;
+#endif
 }
 
 void WWKeyboardClassSDL2::Open_Controller()
