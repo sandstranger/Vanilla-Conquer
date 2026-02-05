@@ -40,12 +40,24 @@ SettingsClass::SettingsClass()
     Video.Windowed = false;
     Video.Width = 0;
     Video.Height = 0;
+#ifndef ANDROID
     Video.Boxing = true;
+#else
+    Video.Boxing = false;
+#endif
     Video.BoxingAspectRatio = "16:10";
+#ifndef ANDROID
     Video.FrameLimit = 120;
+#else
+    Video.FrameLimit = g_frameRateLimit;
+#endif
     Video.InterpolationMode = 2;
     Video.HardwareCursor = false;
+#ifndef ANDROID
     Video.DOSMode = false;
+#else
+    Video.DOSMode = g_useDosMode;
+#endif
     Video.Scaler = "nearest";
     Video.Driver = "default";
     Video.PixelFormat = "default";
