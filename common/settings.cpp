@@ -32,6 +32,10 @@ __attribute__((used)) __attribute__((visibility("default")))
 void setControllerPointerSpeed(const int controllerPointerSpeed ) {
     Settings.Mouse.ControllerPointerSpeed = controllerPointerSpeed;
 }
+__attribute__((used)) __attribute__((visibility("default")))
+void updateRawInputState (const bool enableRawInput){
+    Settings.Mouse.RawInput = enableRawInput;
+}
 }
 #endif
 
@@ -45,11 +49,7 @@ SettingsClass::SettingsClass()
 #else
     Mouse.RawInput = false;
 #endif
-#ifndef ANDROID
     Mouse.Sensitivity = 100;
-#else
-    Mouse.Sensitivity = 200;
-#endif
 #ifndef ANDROID
     Mouse.ControllerEnabled = false;
 #else
