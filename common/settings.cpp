@@ -6,17 +6,31 @@
 SettingsClass Settings;
 
 #if ANDROID
-static bool g_useDosMode = true;
-static int g_frameRateLimit = 120;
+static bool g_onScreenControlsActive = true;
 
 extern "C" {
 __attribute__((used)) __attribute__((visibility("default")))
 void setUseDoseModeState(const bool useDosMode) {
-    g_useDosMode = useDosMode;
+    Settings.Video.DOSMode = useDosMode;
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void setFrameRateLimit(const int frameRateLimit) {
-    g_frameRateLimit = frameRateLimit;
+    Settings.Video.FrameLimit = frameRateLimit;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setOnScreenControlsState(const bool onScreenControlsActive) {
+    g_onScreenControlsActive = onScreenControlsActive;
+    if (onScreenControlsActive) {
+        Settings.Mouse.RawInput = false;
+    }
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setMouseSensitivity(const int mouseSensitivity) {
+    Settings.Mouse.Sensitivity = mouseSensitivity;
+}
+__attribute__((used)) __attribute__((visibility("default")))
+void setControllerPointerSpeed(const int controllerPointerSpeed ) {
+    Settings.Mouse.ControllerPointerSpeed = controllerPointerSpeed;
 }
 }
 #endif
@@ -26,11 +40,24 @@ SettingsClass::SettingsClass()
     /*
     ** Mouse settings
     */
+#ifndef ANDROID
     Mouse.RawInput = true;
+#else
+    Mouse.RawInput = false;
+#endif
+#ifndef ANDROID
     Mouse.Sensitivity = 100;
+#else
+    Mouse.Sensitivity = 200;
+#endif
+#ifndef ANDROID
     Mouse.ControllerEnabled = false;
-    Mouse.ControllerPointerSpeed = 10;
+#else
+    Mouse.ControllerEnabled = true;
+#endif
     Options.MouseWheelScrolling = true;
+
+    Mouse.ControllerPointerSpeed = 10;
 
     /*
     ** Video settings
@@ -46,17 +73,13 @@ SettingsClass::SettingsClass()
     Video.Boxing = false;
 #endif
     Video.BoxingAspectRatio = "16:10";
-#ifndef ANDROID
     Video.FrameLimit = 120;
-#else
-    Video.FrameLimit = g_frameRateLimit;
-#endif
     Video.InterpolationMode = 2;
     Video.HardwareCursor = false;
 #ifndef ANDROID
     Video.DOSMode = false;
 #else
-    Video.DOSMode = g_useDosMode;
+    Video.DOSMode = true;
 #endif
     Video.Scaler = "nearest";
     Video.Driver = "default";
@@ -70,14 +93,16 @@ void SettingsClass::Load(INIClass& ini)
     /*
     ** Mouse settings
     */
-    Mouse.RawInput = ini.Get_Bool("Mouse", "RawInput", Mouse.RawInput);
-    Mouse.Sensitivity = ini.Get_Int("Mouse", "Sensitivity", Mouse.Sensitivity);
 #ifndef ANDROID
-    Mouse.ControllerEnabled = ini.Get_Bool("Mouse", "ControllerEnabled", Mouse.ControllerEnabled);
+    Mouse.RawInput = ini.Get_Bool("Mouse", "RawInput", Mouse.RawInput);
 #else
-    Mouse.ControllerEnabled = true;
+    Mouse.RawInput = !g_onScreenControlsActive && ini.Get_Bool("Mouse", "RawInput", Mouse.RawInput);
 #endif
+#ifndef ANDROID
+    Mouse.Sensitivity = ini.Get_Int("Mouse", "Sensitivity", Mouse.Sensitivity);
+    Mouse.ControllerEnabled = ini.Get_Bool("Mouse", "ControllerEnabled", Mouse.ControllerEnabled);
     Mouse.ControllerPointerSpeed = ini.Get_Int("Mouse", "ControllerPointerSpeed", Mouse.ControllerPointerSpeed);
+#endif
     /*
     ** Compatibility with CNCNet configuration for this feature
     */
@@ -102,10 +127,7 @@ void SettingsClass::Load(INIClass& ini)
     Video.FrameLimit = ini.Get_Int("Video", "FrameLimit", Video.FrameLimit);
     Video.HardwareCursor = ini.Get_Bool("Video", "HardwareCursor", Video.HardwareCursor);
     Video.DOSMode = ini.Get_Bool("Video", "DOSMode", Video.DOSMode);
-#else
     Video.FrameLimit = g_frameRateLimit;
-    Video.HardwareCursor = false;
-    Video.DOSMode = g_useDosMode;
 #endif
     Video.Scaler = ini.Get_String("Video", "Scaler", Video.Scaler);
     Video.Driver = ini.Get_String("Video", "Driver", Video.Driver);

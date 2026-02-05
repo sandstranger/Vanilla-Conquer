@@ -77,8 +77,11 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 key = VK_MBUTTON;
                 break;
             }
-
+#ifndef ANDROID
             if (Settings.Mouse.RawInput || Is_Gamepad_Active()) {
+#else
+            if (Settings.Mouse.RawInput) {
+#endif
                 Get_Video_Mouse(x, y);
             } else {
                 float scale_x = 1.0f, scale_y = 1.0f;

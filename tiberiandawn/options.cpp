@@ -66,16 +66,6 @@ char const* const OptionsClass::HotkeyName = "SDLHotkeys";
 char const* const OptionsClass::HotkeyName = "WinHotkeys";
 #endif
 
-#if ANDROID
-static int g_gameSpeed = 1f;
-extern "C"{
-__attribute__((used)) __attribute__((visibility("default")))
-void setGameSpeed(const int gameSpeed) {
-    g_gameSpeed = gameSpeed;
-}
-}
-#endif
-
 /***********************************************************************************************
  * OptionsClass::OptionsClass -- The default constructor for the options class.                *
  *                                                                                             *
