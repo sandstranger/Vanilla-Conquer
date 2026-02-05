@@ -2,10 +2,14 @@
 #include "settings.h"
 #include "ini.h"
 #include "miscasm.h"
+#if ANDROID
+#include "SDL.h"
+#endif
 
 SettingsClass Settings;
 
 #if ANDROID
+extern SDL_Window* window;
 static bool g_onScreenControlsActive = true;
 
 extern "C" {
@@ -35,6 +39,9 @@ void setControllerPointerSpeed(const int controllerPointerSpeed ) {
 __attribute__((used)) __attribute__((visibility("default")))
 void updateRawInputState (const bool enableRawInput){
     Settings.Mouse.RawInput = enableRawInput;
+    if (window){
+        SDL_SetRelativeMouseMode(enableRawInput ? SDL_TRUE : SDL_FALSE);
+    }
 }
 }
 #endif

@@ -57,7 +57,7 @@ static bool g_enableVsync = true;
 #endif
 
 extern WWKeyboardClass* Keyboard;
-static SDL_Window* window;
+SDL_Window* window;
 static SDL_Renderer* renderer;
 static SDL_Palette* palette;
 static Uint32 pixel_format;
@@ -477,7 +477,7 @@ void Set_Video_Cursor_Clip(bool clipped)
 
     if (window) {
         int relative;
-
+#ifndef ANDROID
         if (Settings.Video.Windowed) {
             SDL_SetWindowGrab(window, hwcursor.Clip ? SDL_TRUE : SDL_FALSE);
             relative = SDL_SetRelativeMouseMode(
@@ -500,7 +500,10 @@ void Set_Video_Cursor_Clip(bool clipped)
             SDL_SetWindowGrab(window, SDL_TRUE);
             relative = SDL_SetRelativeMouseMode(Settings.Mouse.RawInput ? SDL_TRUE : SDL_FALSE);
         }
-
+#else
+        SDL_SetWindowGrab(window, SDL_TRUE);
+        relative = SDL_SetRelativeMouseMode(Settings.Mouse.RawInput ? SDL_TRUE : SDL_FALSE);
+#endif
         if (relative < 0) {
             DBG_ERROR("Raw input not supported, disabling.");
             Settings.Mouse.RawInput = false;
