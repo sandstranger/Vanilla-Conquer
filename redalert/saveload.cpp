@@ -411,7 +411,7 @@ bool Save_Game(const char* file_name, const char* descr)
     /*
     **	Store a dummy message digest.
     */
-    unsigned char digest[SHAEngine::Digest_Size()];
+    char digest[20];
     fpipe.Put(digest, sizeof(digest));
 
     /*
@@ -554,25 +554,22 @@ bool Load_Game(const char* file_name)
     */
     unsigned int version;
     if (fstraw.Get(&version, sizeof(version)) != sizeof(version)) {
-        printf("%s %s:%d\n", __func__, __FILE__, __LINE__);
         return (false);
     }
     GameVersion = version;
 #ifdef FIXIT_CSII //	checked - ajw 9/28/98
     if (version != SAVEGAME_VERSION && ((version - 1) != SAVEGAME_VERSION)) {
-        printf("%s %s:%d\n", __func__, __FILE__, __LINE__);
         return (false);
     }
 #else
     if (version != SAVEGAME_VERSION /*&& version != 0x0100616D*/) {
-        printf("%s %s:%d\n", __func__, __FILE__, __LINE__);
         return (false);
     }
 #endif
     /*
     **	Get the message digest that is embedded in the file.
     */
-    unsigned char digest[SHAEngine::Digest_Size()];
+    char digest[20];
     fstraw.Get(digest, sizeof(digest));
 
     /*
@@ -591,7 +588,8 @@ bool Load_Game(const char* file_name)
         if (sha.Get(_staging_buffer, sizeof(_staging_buffer)) != sizeof(_staging_buffer))
             break;
     }
-    unsigned char actual[SHAEngine::Digest_Size()];
+    char actual[20];
+    sha.Result(actual);
     sha.Get_From(NULL);
 
     Call_Back();
