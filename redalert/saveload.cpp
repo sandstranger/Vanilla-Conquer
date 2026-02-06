@@ -424,7 +424,8 @@ bool Save_Game(const char* file_name, const char* descr)
     LCWPipe pipe(LCWPipe::COMPRESS, SAVE_BLOCK_SIZE);
     bpipe.Key(&FastKey, BlowfishEngine::MAX_KEY_LENGTH);
 
-    bpipe.Put_To(fpipe);
+    sha.Put_To(fpipe);
+    bpipe.Put_To(sha);
     pipe.Put_To(bpipe);
     Put_All(pipe, save_net);
 
@@ -433,22 +434,10 @@ bool Save_Game(const char* file_name, const char* descr)
     **	the data image as it exists on the disk.
     */
     pipe.Flush();
-
-
-    FileStraw fstraw(file);
-    Call_Back();
-    file.Seek(pos + sizeof(digest), SEEK_SET);
-    SHAStraw shastraw;
-    shastraw.Get_From(fstraw);
-    for (;;) {
-        if (shastraw.Get(_staging_buffer, sizeof(_staging_buffer)) != sizeof(_staging_buffer)) {
-            break;
-        }
-    }
-    shastraw.Result(digest);
-    shastraw.Get_From(NULL);
     file.Seek(pos, SEEK_SET);
+    sha.Result(digest);
     fpipe.Put(digest, sizeof(digest));
+
     pipe.End();
 
     Decode_All_Pointers();
@@ -565,15 +554,18 @@ bool Load_Game(const char* file_name)
     */
     unsigned int version;
     if (fstraw.Get(&version, sizeof(version)) != sizeof(version)) {
+        printf("%s %s:%d\n", __func__, __FILE__, __LINE__);
         return (false);
     }
     GameVersion = version;
 #ifdef FIXIT_CSII //	checked - ajw 9/28/98
     if (version != SAVEGAME_VERSION && ((version - 1) != SAVEGAME_VERSION)) {
+        printf("%s %s:%d\n", __func__, __FILE__, __LINE__);
         return (false);
     }
 #else
     if (version != SAVEGAME_VERSION /*&& version != 0x0100616D*/) {
+        printf("%s %s:%d\n", __func__, __FILE__, __LINE__);
         return (false);
     }
 #endif
@@ -596,12 +588,10 @@ bool Load_Game(const char* file_name)
     SHAStraw sha;
     sha.Get_From(fstraw);
     for (;;) {
-        if (sha.Get(_staging_buffer, sizeof(_staging_buffer)) != sizeof(_staging_buffer)) {
+        if (sha.Get(_staging_buffer, sizeof(_staging_buffer)) != sizeof(_staging_buffer))
             break;
-	}
     }
     unsigned char actual[SHAEngine::Digest_Size()];
-    sha.Result(actual);
     sha.Get_From(NULL);
 
     Call_Back();
