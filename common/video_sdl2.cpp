@@ -282,10 +282,10 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     win_h = Settings.Video.Height = 0;
     win_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_OPENGL;
     SDL_Log(g_useGLES2_0 ? "Legacy OpenGL ES 2.0 is using for rendering" :
-            "OpenGL ES 3.2 is using for rendering");
+            "OpenGL ES 3.1 is using for rendering");
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, g_useGLES2_0 ? 2 : 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, g_useGLES2_0 ? 0 : 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, g_useGLES2_0 ? 0 : 1);
     window = SDL_CreateWindow("Vanilla Conquer", 0, 0, 0, 0, win_flags);
 #endif
     if (window == nullptr) {
