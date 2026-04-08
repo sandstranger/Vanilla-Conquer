@@ -13,6 +13,26 @@
 #include <al.h>
 #include <alc.h>
 #include <stdlib.h>
+#if ANDROID
+#include "alext.h"
+
+static ALCdevice* openALDevice;
+
+void SetMute(bool mute){
+    if (openALDevice == nullptr) {
+        return;
+    }
+
+    if( mute )
+    {
+        alcDevicePauseSOFT(openALDevice);
+    }
+    else
+    {
+        alcDeviceResumeSOFT(openALDevice);
+    }
+}
+#endif
 
 enum
 {
@@ -126,6 +146,9 @@ bool SoundImp_Init(int bits_per_sample, bool stereo, int rate, bool reverse_chan
 
         return false;
     }
+#if ANDROID
+    openALDevice = device;
+#endif
 
     OpenALContext = alcCreateContext(device, nullptr);
     if (OpenALContext == nullptr || !alcMakeContextCurrent(OpenALContext)) {
@@ -207,6 +230,9 @@ void SoundImp_Shutdown()
 {
     ALCdevice* device = alcGetContextsDevice(OpenALContext);
 
+#if ANDROID
+    openALDevice = nullptr;
+#endif
     alcMakeContextCurrent(nullptr);
     alcDestroyContext(OpenALContext);
     alcCloseDevice(device);
