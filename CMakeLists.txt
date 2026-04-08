@@ -10,6 +10,10 @@ foreach(_path_elem $ENV{CMAKE_FIND_ROOT_PATH})
 endforeach()
 
 if (ANDROID)
+    add_definitions(-DAL_ALEXT_PROTOTYPES)
+endif()
+
+if (ANDROID)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 else ()
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")

@@ -628,15 +628,18 @@ void Read_Setup_Options(RawFileClass* config_file)
 }
 
 #if ANDROID
+extern void SetMute(bool mute);
 extern void Focus_Restore(void);
 extern void Focus_Loss(void);
 extern "C"{
 __attribute__((used)) __attribute__((visibility("default")))
 void onNativeResume() {
+    SetMute(false);
     Focus_Restore();
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void onNativePause() {
+    SetMute(true);
     Focus_Loss();
 }
 __attribute__((used)) __attribute__((visibility("default")))
