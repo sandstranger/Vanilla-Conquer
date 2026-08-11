@@ -41,9 +41,10 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
     SDL_Event event;
 
     while (!Is_Buffer_Full() && SDL_PollEvent(&event)) {
-#if ANDROID
-        if (event.type == SDL_WINDOWEVENT_SIZE_CHANGED) {
+#ifdef ANDROID
+        if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
             Update_HWCursor_Settings();
+            continue;
         }
 #endif
         unsigned short key;

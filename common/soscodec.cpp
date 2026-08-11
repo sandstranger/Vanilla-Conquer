@@ -102,75 +102,86 @@ void sosCODECGenerateDecompressTable(void)
 /* Template version of sosCODECDecompressData which generates a single version
    for 8-bits and 16-bits.  This instructs the compiler to avoid generating a
    branch in the deepest loop.  */
-template <bool BITS_8> static unsigned sosCODECDecompressDataTemplate(_SOS_COMPRESS_INFO* stream, unsigned bytes)
+template <bool BITS_8>
+static unsigned sosCODECDecompressDataTemplate(_SOS_COMPRESS_INFO* stream, unsigned bytes)
 {
-    unsigned full_length = bytes;
-    bytes = BITS_8 ? (bytes / 2) : (bytes / 4);
+    const unsigned full_length = bytes;
+    const int num_channels = stream->wChannels;
 
-    /* Quickly return if we are not going to write anything.  */
-    if (bytes == 0) {
+    if (num_channels <= 0)
+    {
+        return 0;
+    }
+
+    unsigned compressed_bytes = BITS_8 ? (bytes / 2) : (bytes / 4);
+    unsigned iterations_per_channel = compressed_bytes / num_channels;
+
+    if (iterations_per_channel == 0)
+    {
         return full_length;
     }
 
-    int channel = 0;
-    int num_channels = stream->wChannels;
+    uint8_t* src = reinterpret_cast<uint8_t*>(stream->lpSource);
+    int16_t* dst = reinterpret_cast<int16_t*>(stream->lpDest);
 
-    unsigned char* src = (unsigned char*)stream->lpSource;
-    short* dst = (short*)(stream->lpDest);
-    do {
-        short index = stream->Channels[channel].wIndex;
+    for (int channel = 0; channel < num_channels; ++channel)
+    {
+        int16_t index = stream->Channels[channel].wIndex;
         int sample = stream->Channels[channel].dwPredicted;
 
-        int j = 0;
-        do {
-            unsigned char codebuf = *src;
+        for (unsigned j = 0; j < iterations_per_channel; ++j)
+        {
+            uint8_t codebuf = *src;
             src += num_channels;
 
-            /* First step: case dwSampleIndex is even (unrolled).  */
-            char current_nybble = codebuf & 0xF;
-
+            uint8_t current_nybble = codebuf & 0xF;
             sample += SosDecompTable[index][current_nybble].diff;
             sample = clamp(sample, -32768, 32767);
 
-            if (BITS_8) {
-                *dst = ((sample & 0xFF00) >> 8) ^ 0x80;
-                dst = (short*)((char*)(dst) + num_channels);
-            } else {
-                *dst = sample;
+            if (BITS_8)
+            {
+                uint8_t* dst8 = reinterpret_cast<uint8_t*>(dst);
+                *dst8 = static_cast<uint8_t>(((sample & 0xFF00) >> 8) ^ 0x80);
+                dst = reinterpret_cast<int16_t*>(dst8 + num_channels);
+            }
+            else
+            {
+                *dst = static_cast<int16_t>(sample);
                 dst += num_channels;
             }
-
             index = SosDecompTable[index][current_nybble].index;
 
-            /* Second step: case dwSampleIndex is odd (unrolled).  */
             current_nybble = codebuf >> 4;
             sample += SosDecompTable[index][current_nybble].diff;
             sample = clamp(sample, -32768, 32767);
 
-            if (BITS_8) {
-                *dst = ((sample & 0xFF00) >> 8) ^ 0x80;
-                dst = (short*)((char*)(dst) + num_channels);
-            } else {
-                *dst = sample;
+            if (BITS_8)
+            {
+                uint8_t* dst8 = reinterpret_cast<uint8_t*>(dst);
+                *dst8 = static_cast<uint8_t>(((sample & 0xFF00) >> 8) ^ 0x80);
+                dst = reinterpret_cast<int16_t*>(dst8 + num_channels);
+            }
+            else
+            {
+                *dst = static_cast<int16_t>(sample);
                 dst += num_channels;
             }
-
             index = SosDecompTable[index][current_nybble].index;
-        } while (++j < bytes);
+        }
 
-        /* Write back the important stuff from the loop back to the struct.  */
         stream->Channels[channel].dwPredicted = sample;
         stream->Channels[channel].wIndex = index;
 
-        /* In case of stereo we also need to update the src and dst pointers
-         before proceeding to the next iteration..  */
-        src = (unsigned char*)stream->lpSource + 1;
-        if (BITS_8) {
-            dst = (short*)(stream->lpDest + 1);
-        } else {
-            dst = (short*)(stream->lpDest) + 1;
+        src = reinterpret_cast<uint8_t*>(stream->lpSource) + 1;
+        if (BITS_8)
+        {
+            dst = reinterpret_cast<int16_t*>(reinterpret_cast<uint8_t*>(stream->lpDest) + 1);
         }
-    } while (++channel < num_channels);
+        else
+        {
+            dst = reinterpret_cast<int16_t*>(stream->lpDest) + 1;
+        }
+    }
 
     return full_length;
 }

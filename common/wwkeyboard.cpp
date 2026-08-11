@@ -210,6 +210,11 @@ bool WWKeyboardClass::Put(unsigned short key)
  *=============================================================================================*/
 bool WWKeyboardClass::Put_Key_Message(unsigned short vk_key, bool release)
 {
+    if (vk_key == SDL_SCANCODE_UNKNOWN)
+    {
+        return false;
+    }
+
     /*
     ** Get the status of all of the different keyboard modifiers.  Note, only pay attention
     ** to numlock and caps lock if we are dealing with a key that is affected by them.  Note
