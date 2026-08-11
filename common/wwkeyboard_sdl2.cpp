@@ -41,12 +41,6 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
     SDL_Event event;
 
     while (!Is_Buffer_Full() && SDL_PollEvent(&event)) {
-#ifdef ANDROID
-        if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-            Update_HWCursor_Settings();
-            continue;
-        }
-#endif
         unsigned short key;
         switch (event.type) {
         case SDL_QUIT:
@@ -116,6 +110,13 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 break;
             }
             break;
+#else
+            case SDL_WINDOWEVENT:
+                switch (event.window.event) {
+                    case SDL_WINDOWEVENT_SIZE_CHANGED:
+                        Update_HWCursor_Settings();
+                        break;
+                }
 #endif
         case SDL_MOUSEWHEEL:
 #if ANDROID
@@ -171,6 +172,27 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
         Process_Controller_Axis_Motion();
     }
 }
+
+#ifdef ANDROID
+extern void SetMute(bool mute);
+
+int SDLCALL EventFilter(void*, SDL_Event* event)
+{
+    switch (event->type)
+    {
+        case SDL_APP_WILLENTERBACKGROUND:
+            Focus_Loss();
+            SetMute(true);
+            break;
+        case SDL_APP_DIDENTERFOREGROUND:
+            Focus_Restore();
+            SetMute(false);
+            break;
+    }
+
+    return 1;
+}
+#endif
 
 bool WWKeyboardClassSDL2::Is_Gamepad_Active()
 {

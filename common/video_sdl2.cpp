@@ -244,9 +244,17 @@ SurfaceMonitorClass& AllSurfaces = AllSurfacesDummy; // List of all direct draw 
  * HISTORY:                                                                                    *
  *   09/26/1995 PWG : Created.                                                                 *
  *=============================================================================================*/
+
+#ifdef ANDROID
+extern int SDLCALL EventFilter(void*, SDL_Event* event);
+#endif
+
 bool Set_Video_Mode(int w, int h, int bits_per_pixel)
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+#ifdef ANDROID
+    SDL_AddEventWatch(EventFilter, nullptr);
+#endif
     SDL_ShowCursor(SDL_DISABLE);
 
     int win_w = w;
