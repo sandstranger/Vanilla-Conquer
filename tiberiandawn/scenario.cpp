@@ -45,6 +45,9 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "campaignenemies.h"
+#include "campaignperks.h"
+#include "smoothmotion.h"
 #include "common/framelimit.h"
 
 extern int PreserveVQAScreen;
@@ -282,6 +285,8 @@ bool Read_Scenario(char* root)
         return (false);
     }
     ScenarioInit--;
+    Campaign_Enemies_Apply();
+    Apply_Campaign_Unlimited_Power(PlayerPtr);
     CCDebugString("C&C95 - Leaving Read_Scenario.\n");
     return (true);
 }
@@ -346,6 +351,8 @@ void Fill_In_Data(void)
  *=============================================================================================*/
 void Clear_Scenario(void)
 {
+    Smooth_Motion_Reset();
+    Campaign_Enemies_Reset();
     EndCountDown = TICKS_PER_SECOND * 30;
     CrateCount = 0;
     CrateTimer = 0;
@@ -813,6 +820,17 @@ bool Restate_Mission(char const* name, int button1, int button2)
 
 void Fixup_Scenario(void)
 {
+    // Reapply local defense sight to existing buildings, including native old saves.
+    if (GameToPlay == GAME_NORMAL && PlayerPtr) {
+        for (int i = 0; i < Buildings.Count(); ++i) {
+            BuildingClass* building = Buildings.Ptr(i);
+            if (building && !building->IsInLimbo && building->House == PlayerPtr
+                && (building->Class->Type == STRUCT_OBELISK || building->Class->Type == STRUCT_ATOWER
+                    || building->Class->Type == STRUCT_SAM)) {
+                building->Look();
+            }
+        }
+    }
     /*
     ** "Fraidycat" civilians avoid wandering into Tiberium for SCG08EB, since they're mission-critical.
     */

@@ -88,6 +88,8 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "enemyfusion.h"
+#include "campaignenemies.h"
 #include "ccini.h"
 
 /***********************************************************************************************
@@ -212,6 +214,7 @@ AircraftClass::AircraftClass(AircraftType classid, HousesType house)
     : Class(&AircraftTypeClass::As_Reference(classid))
     , FootClass(house)
 {
+    Campaign_Enemies_Forget(this);
     /*
     **	For two shooters, clear out the second shot flag -- it will be set the first time
     **	the object fires. For non two shooters, set the flag since it will never be cleared
@@ -392,8 +395,8 @@ void AircraftClass::Draw_It(int x, int y, WindowNumberType window)
             CC_Draw_Shape(this,
                           shapefile,
                           shapenum,
-                          x + 1,
-                          y + 2,
+                          x + EnemyFusion::Visual_Pixels(this, 1),
+                          y + EnemyFusion::Visual_Pixels(this, 2),
                           window,
                           SHAPE_PREDATOR | SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_FADING,
                           Map.FadingShade,
@@ -407,8 +410,8 @@ void AircraftClass::Draw_It(int x, int y, WindowNumberType window)
             CC_Draw_Shape(this,
                           shapefile,
                           shapenum,
-                          x + 1,
-                          y + 2,
+                          x + EnemyFusion::Visual_Pixels(this, 1),
+                          y + EnemyFusion::Visual_Pixels(this, 2),
                           window,
                           SHAPE_PREDATOR | SHAPE_CENTER | SHAPE_WIN_REL | SHAPE_FADING,
                           Map.FadingShade,
@@ -450,15 +453,15 @@ void AircraftClass::Draw_It(int x, int y, WindowNumberType window)
             short xx = x;
             short yy = y - Altitude;
             FacingType face = Dir_Facing(SecondaryFacing);
-            Move_Point(xx, yy, SecondaryFacing.Current(), _stretch[face]);
+            Move_Point(xx, yy, SecondaryFacing.Current(), EnemyFusion::Visual_Pixels(this, _stretch[face]));
             // CC_Draw_Shape(Class->RRotorData, shapenum, xx, yy-2, window, flags, NULL, Map.UnitShadow);		// 6/18/2019
             // - ST
-            CC_Draw_Shape(this, "RROTOR", Class->RRotorData, shapenum, xx, yy - 2, window, flags, NULL, Map.UnitShadow);
+            CC_Draw_Shape(this, "RROTOR", Class->RRotorData, shapenum, xx, yy - EnemyFusion::Visual_Pixels(this, 2), window, flags, NULL, Map.UnitShadow);
 
-            Move_Point(xx, yy, SecondaryFacing.Current() + DIR_S, _stretch[face] * 2);
+            Move_Point(xx, yy, SecondaryFacing.Current() + DIR_S, EnemyFusion::Visual_Pixels(this, _stretch[face] * 2));
             // CC_Draw_Shape(this, Class->LRotorData, shapenum, xx, yy-2, window, flags, NULL, Map.UnitShadow);			//
             // 6/18/2019 - ST
-            CC_Draw_Shape(this, "LROTOR", Class->LRotorData, shapenum, xx, yy - 2, window, flags, NULL, Map.UnitShadow);
+            CC_Draw_Shape(this, "LROTOR", Class->LRotorData, shapenum, xx, yy - EnemyFusion::Visual_Pixels(this, 2), window, flags, NULL, Map.UnitShadow);
 
         } else {
 
@@ -472,7 +475,7 @@ void AircraftClass::Draw_It(int x, int y, WindowNumberType window)
                           Class->RRotorData,
                           shapenum,
                           x,
-                          (y - Altitude) - 2,
+                          (y - Altitude) - EnemyFusion::Visual_Pixels(this, 2),
                           window,
                           flags,
                           NULL,
@@ -3224,6 +3227,7 @@ DirType AircraftClass::Fire_Direction(void) const
  *=============================================================================================*/
 AircraftClass::~AircraftClass(void)
 {
+    Campaign_Enemies_Forget(this);
     if (GameActive && Class) {
 
 #ifdef USE_RA_AI

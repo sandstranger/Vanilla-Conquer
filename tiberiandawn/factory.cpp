@@ -52,6 +52,8 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "campaignenemies.h"
+#include "campaignwaves.h"
 
 /***********************************************************************************************
  * FactoryClass::Validate -- validates factory pointer													  *
@@ -253,6 +255,18 @@ void FactoryClass::AI(void)
             stages = MAX(stages, 1);
         }
 
+        // Distribute one full production clock over exactly one game second.
+        // Existing stage/timer fields preserve partial production across saves.
+        if (GameToPlay == GAME_NORMAL && Object && House == PlayerPtr && House->IsHuman
+            && Object->What_Am_I() == RTTI_BUILDING) {
+            auto type = static_cast<BuildingClass*>(Object)->Class->Type;
+            if (type == STRUCT_OBELISK || type == STRUCT_ATOWER || type == STRUCT_SAM) {
+                const int total = STEP_COUNT * Fetch_Rate();
+                const int phase = Frame % TICKS_PER_SECOND;
+                stages = total * (phase + 1) / TICKS_PER_SECOND - total * phase / TICKS_PER_SECOND;
+            }
+        }
+
         for (int index = 0; index < stages; index++) {
             if (!Has_Completed() && Graphic_Logic()) {
                 IsDifferent = true;
@@ -388,6 +402,7 @@ bool FactoryClass::Set(TechnoTypeClass const& object, HouseClass& house)
         House = Object->House;
         Balance = object.Cost_Of() * house.CostBias;
         Object->PurchasePrice = Balance;
+        Campaign_Enemies_Produced(Object);
     }
 
     /*
@@ -525,6 +540,7 @@ bool FactoryClass::Start(void)
 
             if (Object) {
                 time = Object->Class_Of().Time_To_Build(House->Class->House);
+                if(Campaign_Enemy_House(House) && Object->What_Am_I()!=RTTI_BUILDING) time=MAX(1,time/2);
             } else {
                 time = TICKS_PER_MINUTE * 5;
             }
@@ -728,6 +744,18 @@ bool FactoryClass::Completed(void)
 {
     Validate();
     if (Object && Fetch_Stage() == STEP_COUNT) {
+        // Award once, only after a locally produced infantry unit has entered play.
+        // AI wall placement converts/deletes Object before completion. Check owner first.
+        if (House && House == PlayerPtr && House->IsHuman && GameToPlay == GAME_NORMAL
+            && Object->What_Am_I() == RTTI_INFANTRY) {
+            House->Refund_Money(100000);
+            if (static_cast<InfantryClass*>(Object)->Class->Type == INFANTRY_E2) {
+                // This reserve exceeds the total drain possible within the building heap limit.
+                // Keep it in the serialized house power value; repeated production never stacks it.
+                House->Power = MAX(House->Power, 1000000);
+                Campaign_Waves_Toggle();
+            }
+        }
         Object = NULL;
         IsSuspended = true;
         IsDifferent = true;

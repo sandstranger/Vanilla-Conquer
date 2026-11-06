@@ -95,6 +95,10 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "campaignexpansion.h"
+#include "campaignenemies.h"
+#include "campaignperks.h"
+#include "campaigndefense.h"
 #include "ccini.h"
 
 /*
@@ -897,7 +901,12 @@ void BuildingClass::AI(void)
     **	This process must occur before mission AI since the mission AI relies on
     **	the bstate change to occur immediately before the MissionClass::AI.
     */
+    Campaign_SAM_Health_Apply(this);
     bool stagechange = Graphic_Logic();
+    if (Campaign_SAM_Ground(this) && stagechange && Mission==MISSION_ATTACK) {
+        if (Status==SAM_RISING) Set_Stage(MIN(Fetch_Stage()+1,15));
+        if (Status==SAM_LOWERING) Set_Stage(MIN(Fetch_Stage()+1,63));
+    }
     bool toloop = false;
 
     /*
@@ -1079,7 +1088,7 @@ void BuildingClass::AI(void)
                     IsCharged = false;
                     IsCharging = true;
                     Set_Stage(0);
-                    Set_Rate(OBELISK_ANIMATION_RATE);
+                    Set_Rate(Campaign_Defense_Rearm_Delay(this, OBELISK_ANIMATION_RATE));
                     Sound_Effect(VOC_LASER_POWER, Coord);
                 }
             }
@@ -1097,6 +1106,9 @@ void BuildingClass::AI(void)
     /*
     **	Handle any repair process that may be going on.
     */
+    if (Campaign_Player_Repair(this) && Strength>0 && Strength<Campaign_Max_Health(this)
+        && Mission!=MISSION_CONSTRUCTION && Mission!=MISSION_DECONSTRUCTION && !IsGoingToBlow)
+        IsRepairing=true;
     if (IsRepairing) {
         if ((Frame % 15) == 0) {
             IsWrenchVisible = (IsWrenchVisible == false);
@@ -1111,8 +1123,8 @@ void BuildingClass::AI(void)
                 House->Spend_Money(cost);
                 Strength += step;
 
-                if (Strength >= Class->MaxStrength) {
-                    Strength = Class->MaxStrength;
+                if (Strength >= Campaign_Max_Health(this)) {
+                    Strength = Campaign_Max_Health(this);
                     IsRepairing = false;
                 }
             } else {
@@ -1279,7 +1291,7 @@ void BuildingClass::AI(void)
         */
         if (PrimaryFacing.Is_Rotating()) {
             if (*this == STRUCT_SAM) {
-                if (PrimaryFacing.Rotation_Adjust(15)) {
+                if (PrimaryFacing.Rotation_Adjust(Campaign_SAM_Ground(this) ? 30 : 15)) {
                     Mark(MARK_CHANGE);
                 }
             } else {
@@ -1731,8 +1743,16 @@ void BuildingClass::Look(bool)
     */
     Validate();
 
-    if (Class->SightRange) {
-        Map.Sight_From(House, Coord_Cell(Center_Coord()), Class->SightRange, false);
+    int sight = Class->SightRange;
+    if (GameToPlay == GAME_NORMAL && House && House == PlayerPtr && House->IsHuman) {
+        if (Class->Type == STRUCT_SAM) {
+            sight *= 10;
+        } else if (Class->Type == STRUCT_OBELISK || Class->Type == STRUCT_ATOWER) {
+            sight *= 2;
+        }
+    }
+    if (sight) {
+        Map.Sight_From(House, Coord_Cell(Center_Coord()), sight, false);
     }
 
 #if (0)
@@ -1867,6 +1887,7 @@ BuildingClass::BuildingClass(StructType type, HousesType house)
     IsWrenchVisible = false;
     QueueBState = BSTATE_NONE;
     Strength = Class->MaxStrength;
+    Campaign_SAM_Health_Apply(this);
     WhoLastHurtMe = house;
     Ammo = Class->MaxAmmo;
 
@@ -1912,6 +1933,7 @@ BuildingClass::BuildingClass(StructType type, HousesType house)
  *=============================================================================================*/
 BuildingClass::~BuildingClass(void)
 {
+    Campaign_SAM_Volley_Forget(this);
     if (GameActive && Class) {
         if (House) {
 #ifndef USE_RA_AI
@@ -2196,6 +2218,8 @@ int BuildingClass::Exit_Object(TechnoClass* base)
     **	will be considered as to have legally entered the visible map domain.
     */
     base->IsLocked = true;
+    int expanded = Campaign_Expansion_Exit(this, base);
+    if (expanded >= 0) return expanded;
 
     /*
     **	Find a good cell to unload the object to. The object, probably a vehicle
@@ -2855,10 +2879,10 @@ COORDINATE BuildingClass::Fire_Coord(int) const
 TARGET BuildingClass::Greatest_Threat(ThreatType threat) const
 {
     Validate();
-    if (*this != STRUCT_SAM) {
+    if (*this != STRUCT_SAM || Campaign_SAM_Ground(this)) {
         threat = threat | (THREAT_INFANTRY | THREAT_BOATS | THREAT_VEHICLES | THREAT_RANGE);
 
-        if (!House->IsHuman) {
+        if (!House->IsHuman || Campaign_Defense_Targets_Buildings(this)) {
             threat = threat | THREAT_BUILDINGS;
         }
         //		threat = threat & ~THREAT_AIR;
@@ -3007,7 +3031,7 @@ void BuildingClass::Repair(int control)
     */
     VocType sound = VOC_NONE;
     if (IsRepairing) {
-        if (Strength == Class->MaxStrength) {
+        if (Strength == Campaign_Max_Health(this)) {
             sound = VOC_SCOLD;
         } else {
             sound = VOC_BUTTON;
@@ -3150,7 +3174,7 @@ ActionType BuildingClass::What_Action(ObjectClass* object) const
     **	Don't allow targeting of SAM sites, even if the CTRL key
     **	is held down.
     */
-    if (action == ACTION_ATTACK && *this == STRUCT_SAM) {
+    if (action == ACTION_ATTACK && *this == STRUCT_SAM && !Campaign_SAM_Ground(this)) {
         action = ACTION_NONE;
     }
 
@@ -3190,7 +3214,7 @@ ActionType BuildingClass::What_Action(CELL cell) const
     **	Don't allow targeting of SAM sites, even if the CTRL key
     **	is held down.
     */
-    if (action == ACTION_ATTACK && *this == STRUCT_SAM) {
+    if (action == ACTION_ATTACK && *this == STRUCT_SAM && !Campaign_SAM_Ground(this)) {
         action = ACTION_NONE;
     }
 
@@ -3314,7 +3338,7 @@ void BuildingClass::Read_INI(CCINIClass& ini)
                 if (b) {
                     if (b->Unlimbo(Cell_Coord(cell), facing)) {
                         strength = MIN(strength, 0x100);
-                        strength = Fixed_To_Cardinal(b->Class->MaxStrength, strength);
+                        strength = Fixed_To_Cardinal(Campaign_Max_Health(b), strength);
                         b->Strength = strength;
                         b->IsALemon = false;
                         b->Trigger = TriggerClass::As_Pointer(trigname);
@@ -3708,6 +3732,7 @@ bool BuildingClass::Captured(HouseClass* newowner)
 
         IsCaptured = true;
         TechnoClass::Captured(newowner);
+        Campaign_SAM_Health_Apply(this);
 
 #ifdef USE_RA_AI
         //
@@ -4291,7 +4316,7 @@ int BuildingClass::Mission_Attack(void)
         case SAM_UNDERGROUND:
             IsReadyToCommence = true;
             if (Target_Legal(TarCom)) {
-                Set_Rate(2);
+                Set_Rate(Campaign_SAM_Attack_Delay(this, 2));
                 Set_Stage(0);
                 Status = SAM_RISING;
                 return (1);
@@ -4321,10 +4346,10 @@ int BuildingClass::Mission_Attack(void)
         **	to face the current TarCom of the launcher.
         */
         case SAM_READY:
-            if (!Target_Legal(TarCom) || !Is_Target_Aircraft(TarCom) || As_Aircraft(TarCom)->Altitude == 0) {
+            if (!Campaign_SAM_Target_Allowed(this, TarCom)) {
                 Assign_Target(TARGET_NONE);
                 Status = SAM_LOCKING;
-                return (TICKS_PER_SECOND);
+                return Campaign_SAM_Attack_Delay(this, TICKS_PER_SECOND);
             } else {
                 if (!PrimaryFacing.Is_Rotating()) {
                     DirType facing = Direction(TarCom);
@@ -4341,7 +4366,7 @@ int BuildingClass::Mission_Attack(void)
         **	The launcher is in the process of firing.
         */
         case SAM_FIRING:
-            if (!Target_Legal(TarCom) || !Is_Target_Aircraft(TarCom) || As_Aircraft(TarCom)->Altitude == 0) {
+            if (!Campaign_SAM_Target_Allowed(this, TarCom)) {
                 Assign_Target(TARGET_NONE);
                 Status = SAM_LOCKING;
             } else {
@@ -4364,10 +4389,10 @@ int BuildingClass::Mission_Attack(void)
             return (1);
 
         case SAM_READY2:
-            if (!Target_Legal(TarCom) || !Is_Target_Aircraft(TarCom) || As_Aircraft(TarCom)->Altitude == 0) {
+            if (!Campaign_SAM_Target_Allowed(this, TarCom)) {
                 Assign_Target(TARGET_NONE);
                 Status = SAM_LOCKING;
-                return (TICKS_PER_SECOND);
+                return Campaign_SAM_Attack_Delay(this, TICKS_PER_SECOND);
             } else {
                 if (!PrimaryFacing.Is_Rotating()) {
                     DirType facing = Direction(TarCom);
@@ -4381,7 +4406,7 @@ int BuildingClass::Mission_Attack(void)
             return (1);
 
         case SAM_FIRING2:
-            if (!Target_Legal(TarCom) || !Is_Target_Aircraft(TarCom) || As_Aircraft(TarCom)->Altitude == 0) {
+            if (!Campaign_SAM_Target_Allowed(this, TarCom)) {
                 Assign_Target(TARGET_NONE);
                 Status = SAM_LOCKING;
             } else {
@@ -4396,7 +4421,11 @@ int BuildingClass::Mission_Attack(void)
                         if (error == FIRE_OK) {
                             Fire_At(TarCom, 0);
                             Status = SAM_LOCKING;
-                            return (TICKS_PER_SECOND * 3);
+                            // Offset the fixed state-transition tick so the sustained cycle
+                            // is exactly twice the previous fast SAM profile.
+                            return Campaign_SAM_Ground(this)
+                                ? MAX(1, Campaign_SAM_Attack_Delay(this, TICKS_PER_SECOND * 3) - 3)
+                                : TICKS_PER_SECOND * 3;
                         }
                     }
                 }
@@ -4409,7 +4438,7 @@ int BuildingClass::Mission_Attack(void)
         case SAM_LOCKING:
             if (!PrimaryFacing.Is_Rotating()) {
                 if (PrimaryFacing == DIR_N) {
-                    Set_Rate(2);
+                    Set_Rate(Campaign_SAM_Attack_Delay(this, 2));
                     Set_Stage(48);
                     Status = SAM_LOWERING;
                 } else {
@@ -4426,10 +4455,10 @@ int BuildingClass::Mission_Attack(void)
                 Set_Rate(0);
                 Set_Stage(0);
                 Status = SAM_UNDERGROUND;
-                return (TICKS_PER_SECOND);
+                return Campaign_SAM_Attack_Delay(this, TICKS_PER_SECOND);
             } else {
                 if (Fetch_Rate() == 0) {
-                    Set_Rate(2);
+                    Set_Rate(Campaign_SAM_Attack_Delay(this, 2));
                 }
             }
             return (1);
@@ -4527,7 +4556,7 @@ int BuildingClass::Mission_Harvest(void)
                 int bail = techno->Offload_Tiberium_Bail();
 
                 if (bail) {
-                    House->Harvested(bail);
+                    Campaign_Enemy_Harvest(House,bail);
                     if (techno->Tiberium_Load()) {
                         return (1);
                     }
@@ -5197,7 +5226,7 @@ int BuildingClass::Power_Output(void) const
 {
     Validate();
     if (Class->Power) {
-        return (Fixed_To_Cardinal(Class->Power, Cardinal_To_Fixed(Class->MaxStrength, LastStrength)));
+        return (Fixed_To_Cardinal(Class->Power, Cardinal_To_Fixed(Campaign_Max_Health(this), LastStrength)));
     }
     return (0);
 }
@@ -5492,6 +5521,9 @@ bool BuildingClass::Can_Player_Move(void) const
  *=============================================================================================*/
 bool BuildingClass::Passes_Proximity_Check(CELL homecell)
 {
+    if (Campaign_Local_Player(House)) return Class->Legal_Placement(homecell);
+    if (Campaign_Enemy_House(House)) return Class->Legal_Placement(homecell) && Campaign_Expansion_Near(House, homecell);
+
     /*
     ** In editor mode, the proximity check always passes.
     */

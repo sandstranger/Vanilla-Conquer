@@ -127,7 +127,15 @@ void PowerClass::Init_Clear(void)
 void PowerClass::One_Time(void)
 {
     RadarClass::One_Time();
+    Configure_Power_Layout();
+    int factor = Get_Resolution_Factor();
+    PowerShape = MFCD::Retrieve((factor) ? "HPOWER.SHP" : "POWER.SHP");
+    PowerBarShape = Hires_Retrieve("PWRBAR.SHP");
+}
 
+void PowerClass::Configure_Power_Layout(void)
+{
+    Configure_Radar_Layout();
     int factor = Get_Resolution_Factor();
     PowX = SeenBuff.Get_Width() - Map.RadWidth;
     if (factor) {
@@ -145,8 +153,6 @@ void PowerClass::One_Time(void)
     PowerButton.Width = PowWidth - 1;
     PowerButton.Height = PowHeight;
 
-    PowerShape = MFCD::Retrieve((factor) ? "HPOWER.SHP" : "POWER.SHP");
-    PowerBarShape = Hires_Retrieve("PWRBAR.SHP");
 }
 
 /***********************************************************************************************
@@ -206,7 +212,9 @@ void PowerClass::Draw_It(bool complete)
                 if (factor) {
 
                     CC_Draw_Shape(PowerBarShape, 0, PowX, PowY, WINDOW_CUSTOM, SHAPE_WIN_REL);
-                    CC_Draw_Shape(PowerBarShape, 1, PowX, PowY + 100, WINDOW_CUSTOM, SHAPE_WIN_REL);
+                    for (int offset = 100; offset < PowHeight; offset += 100) {
+                        CC_Draw_Shape(PowerBarShape, 1, PowX, PowY + offset, WINDOW_CUSTOM, SHAPE_WIN_REL);
+                    }
                 } else {
                     /* Draw MS-DOS power gauge. */
                     int top_y = PowY + 1;
@@ -259,12 +267,11 @@ void PowerClass::Draw_It(bool complete)
                                       WINDOW_CUSTOM,
                                       SHAPE_WIN_REL);
 
-                        CC_Draw_Shape(PowerBarShape,
-                                      3 + power_color,
-                                      PowX,
-                                      PowY - WindowList[WINDOW_CUSTOM][WINDOWY] + 100,
-                                      WINDOW_CUSTOM,
-                                      SHAPE_WIN_REL);
+                        for (int offset = 100; offset < PowHeight; offset += 100) {
+                            CC_Draw_Shape(PowerBarShape, 3 + power_color, PowX,
+                                          PowY - WindowList[WINDOW_CUSTOM][WINDOWY] + offset,
+                                          WINDOW_CUSTOM, SHAPE_WIN_REL);
+                        }
                     } else {
                         LogicPage->Fill_Rect(PowX + 2, bottom - power_height + 1, PowX + 5, bottom - 1, power_color);
                     }

@@ -37,6 +37,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "enemyfusion.h"
 
 void const* TabClass::TabShape = NULL;
 
@@ -80,6 +81,8 @@ TabClass::TabClass(void)
  *=============================================================================================*/
 void TabClass::Draw_It(bool complete)
 {
+    // Restore the world pixels before any incremental terrain/scroll blit reads HidPage.
+    EnemyFusion::Restore_Counts();
 
     SidebarClass::Draw_It(complete);
 
@@ -121,13 +124,14 @@ void TabClass::Draw_It(bool complete)
     }
 
     Credits.Graphic_Logic(complete || IsToRedraw);
+    EnemyFusion::Draw_Counts();
 #endif
     IsToRedraw = false;
 }
 
 void TabClass::Draw_Credits_Tab(void)
 {
-    unsigned x = Get_Resolution_Factor() ? 320 : 160;
+    unsigned x = SeenBuff.Get_Width() - (Get_Resolution_Factor() ? 320 : 160);
     CC_Draw_Shape(TabShape, 0, x, 0, WINDOW_MAIN, SHAPE_NORMAL);
 }
 

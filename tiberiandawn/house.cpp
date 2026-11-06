@@ -98,6 +98,9 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "campaignexpansion.h"
+#include "campaignenemies.h"
+#include "campaignperks.h"
 
 /*
 ** New sidebar for GlyphX multiplayer. ST - 3/26/2019 12:24PM
@@ -106,6 +109,8 @@
 #include "defines.h"
 #include "common/irandom.h"
 #include "ccini.h"
+#include "campaigntech.h"
+#include "common/settings.h"
 #include "common/fixed.h"
 
 /***********************************************************************************************
@@ -548,9 +553,65 @@ HouseClass::HouseClass(HousesType house)
  *   07/04/1995 JLB : Created.                                                                 *
  *   08/12/1995 JLB : Updated for GDI building sandbag walls in #9.                            *
  *=============================================================================================*/
+bool Campaign_All_Tech(const HouseClass* house)
+{
+    return house && CampaignTech::Enabled(Settings.Options.CampaignAllTech, GameToPlay == GAME_NORMAL,
+        house == PlayerPtr, house->IsHuman,
+        house->Class->House == HOUSE_GOOD || house->Class->House == HOUSE_BAD
+            || (Special.IsJurassic && ScenPlayer == SCEN_PLAYER_JP));
+}
+
+bool Campaign_All_Tech_Type(const TechnoTypeClass* type, const HouseClass* house)
+{
+    return type && CampaignTech::Eligible(Campaign_All_Tech(house), type->IsBuildable,
+                                         (type->Ownable & (HOUSEF_GOOD | HOUSEF_BAD)) != 0, type->Level, type->Scenario);
+}
+
+COORDINATE Campaign_Production_Anchor(const HouseClass* house)
+{
+    for (int i=0;i<Buildings.Count();++i) {
+        auto b=Buildings.Ptr(i);
+        if (b->House==house && !b->IsInLimbo && b->Strength>0) return b->Center_Coord();
+    }
+    for (int i=0;i<Units.Count();++i) {
+        auto u=Units.Ptr(i);
+        if (u->House==house && !u->IsInLimbo && u->Strength>0) return u->Center_Coord();
+    }
+    for (int i=0;i<Infantry.Count();++i) {
+        auto f=Infantry.Ptr(i);
+        if (f->House==house && !f->IsInLimbo && f->Strength>0) return f->Center_Coord();
+    }
+    return Cell_Coord(XY_Cell(Map.MapCellX+Map.MapCellWidth/2,Map.MapCellY+Map.MapCellHeight/2));
+}
+
+bool Campaign_Production_Exit(TechnoClass* object)
+{
+    if (!object || !Campaign_All_Tech_Type(object->Techno_Type_Class(),object->House)
+        || object->What_Am_I()==RTTI_BUILDING) return false;
+    auto foot=static_cast<FootClass*>(object);
+    CELL anchor=Coord_Cell(Campaign_Production_Anchor(object->House));
+    for (int radius=0;radius<MAX(Map.MapCellWidth,Map.MapCellHeight);++radius)
+        for (int dy=-radius;dy<=radius;++dy) for (int dx=-radius;dx<=radius;++dx) {
+            if (MAX(ABS(dx),ABS(dy))!=radius) continue;
+            int x=Cell_X(anchor)+dx,y=Cell_Y(anchor)+dy;
+            if (x<0||x>=MAP_CELL_W||y<0||y>=MAP_CELL_H) continue;
+            CELL cell=XY_Cell(x,y);
+            if (!Map.In_Radar(cell)||foot->Can_Enter_Cell(cell)!=MOVE_OK) continue;
+            if (object->What_Am_I()==RTTI_AIRCRAFT) static_cast<AircraftClass*>(object)->Altitude=AircraftClass::FLIGHT_LEVEL;
+            if (object->Unlimbo(Cell_Coord(cell),DIR_S)) {
+                foot->IsLocked=true;foot->Assign_Mission(MISSION_GUARD);foot->Commence();
+                Map.Map_Cell(cell,object->House,true);
+                return true;
+            }
+        }
+    return false; // Keep completed production pending if every legal cell is occupied.
+}
+
 bool HouseClass::Can_Build(TechnoTypeClass const* type, HousesType house) const
 {
     Validate();
+    if (Campaign_All_Tech_Type(type, this))
+        return true;
     if (!type || !type->IsBuildable || !((1L << house) & type->Ownable))
         return (false);
 
@@ -980,6 +1041,7 @@ void HouseClass::AI(void)
     if (GameToPlay == GAME_NORMAL) {
         Power = MAX(Power, 0);
         Drain = MAX(Drain, 0);
+        Apply_Campaign_Unlimited_Power(this);
     }
 
     /*
@@ -1614,6 +1676,14 @@ void HouseClass::AI(void)
     if (PlayerPtr == this && IsRecalcNeeded) {
         IsRecalcNeeded = false;
         Map.Recalc();
+        if (Campaign_All_Tech(this)) {
+            const RTTIType kinds[]={RTTI_BUILDINGTYPE,RTTI_UNITTYPE,RTTI_INFANTRYTYPE,RTTI_AIRCRAFTTYPE};
+            const int counts[]={STRUCT_COUNT,UNIT_COUNT,INFANTRY_COUNT,AIRCRAFT_COUNT};
+            for (int k=0;k<4;++k) for (int id=0;id<counts[k];++id) {
+                auto type=Fetch_Techno_Type(kinds[k],id);
+                if (Campaign_All_Tech_Type(type,this)) Map.Add(kinds[k],id);
+            }
+        }
 
 #ifdef NEVER
         /*
@@ -2866,7 +2936,7 @@ bool HouseClass::Place_Object(RTTIType type, CELL cell)
                 TechnoClass* builder = pending->Who_Can_Build_Me(false, false);
                 TechnoTypeClass const* object_type = pending->Techno_Type_Class();
 
-                if (builder && builder->Exit_Object(pending)) {
+                if ((builder && builder->Exit_Object(pending) == 2) || (!builder && Campaign_Production_Exit(pending))) {
 
                     /*
                     **	Since the object has left the factory under its own power, delete
@@ -2911,14 +2981,14 @@ bool HouseClass::Place_Object(RTTIType type, CELL cell)
 
             if (tech) {
                 TechnoClass* builder = tech->Who_Can_Build_Me(false, false);
-                if (builder) {
+                if (builder || Campaign_All_Tech_Type(tech->Techno_Type_Class(),this)) {
 
                     /*
                     **	Ensures that the proximity check is performed even when the building is
                     **	placed by way of a remote event.
                     */
                     if (tech->What_Am_I() != RTTI_BUILDING || ((BuildingClass*)tech)->Passes_Proximity_Check(cell)) {
-                        builder->Transmit_Message(RADIO_HELLO, tech);
+                        if (builder) builder->Transmit_Message(RADIO_HELLO, tech);
                         if (tech->Unlimbo(Cell_Coord(cell))) {
                             factory->Completed();
                             Abandon_Production(type);
@@ -2936,7 +3006,7 @@ bool HouseClass::Place_Object(RTTIType type, CELL cell)
                                 Speak(VOX_DEPLOY);
                             }
                         }
-                        builder->Transmit_Message(RADIO_OVER_OUT);
+                        if (builder) builder->Transmit_Message(RADIO_OVER_OUT);
                     }
                 }
                 return (false);
@@ -2974,7 +3044,8 @@ bool HouseClass::Place_Object(RTTIType type, CELL cell)
 bool HouseClass::Manual_Place(BuildingClass* builder, BuildingClass* object)
 {
     Validate();
-    if (this == PlayerPtr && !Map.PendingObject && builder && object) {
+    if (this == PlayerPtr && !Map.PendingObject && object
+        && (builder || Campaign_All_Tech_Type(object->Techno_Type_Class(),this))) {
 
         /*
         **	Ensures that object selection doesn't remain when
@@ -2990,8 +3061,8 @@ bool HouseClass::Manual_Place(BuildingClass* builder, BuildingClass* object)
         Map.PendingHouse = Class->House;
 
         Map.Set_Cursor_Shape(object->Occupy_List(true));
-        Map.Set_Cursor_Pos(Coord_Cell(builder->Coord));
-        builder->Mark(MARK_CHANGE);
+        Map.Set_Cursor_Pos(Coord_Cell(builder ? builder->Coord : Campaign_Production_Anchor(this)));
+        if (builder) builder->Mark(MARK_CHANGE);
         return (true);
     }
     return (false);
@@ -3493,6 +3564,8 @@ TechnoTypeClass const* HouseClass::Suggest_New_Object(RTTIType objecttype) const
 {
     Validate();
     TechnoTypeClass const* techno = NULL;
+    // Campaign construction and MCV expansion take priority over fixed blueprints/team quotas.
+    if (auto expansion = Campaign_Expansion_Suggest(this, objecttype)) return expansion;
 
 #ifdef USE_RA_AI
     //
@@ -3777,6 +3850,7 @@ TechnoTypeClass const* HouseClass::Suggest_New_Object(RTTIType objecttype) const
         }
         break;
     }
+    if(!techno) techno=Campaign_Enemy_Suggest(this,objecttype);
     return (techno);
 }
 
@@ -7034,7 +7108,7 @@ void HouseClass::Tracking_Remove(TechnoClass const* techno)
         if (type >= UNIT_RA_COUNT)
             type -= UNIT_RA_COUNT;
 #endif
-        UQuantity[type]--;
+        if (type <= UNIT_STEG) UQuantity[type]--;
         break;
 
 #if (0)
@@ -7135,9 +7209,9 @@ void HouseClass::Tracking_Add(TechnoClass const* techno)
         quant = unit;
         if (quant >= UNIT_RA_COUNT)
             quant -= UNIT_RA_COUNT;
-        UQuantity[quant]++;
+        if (quant <= UNIT_STEG) UQuantity[quant]++;
 #else
-        UQuantity[unit]++;
+        if (unit <= UNIT_STEG) UQuantity[unit]++;
 #endif
         UScan |= (1L << unit);
 #if (0) // This is a stats thing. ST - 7/24/2019 3:08PM

@@ -91,6 +91,16 @@ set(TIBDAWN_SRC
     reinf.cpp
     rules.cpp
     saveload.cpp
+    missionstarts.cpp
+    siegetank.cpp
+    campaignbike.cpp
+    campaignformation.cpp
+    campaigntraffic.cpp
+    campaignrepair.cpp
+    campaignexpansion.cpp
+    campaignenemies.cpp
+    enemyfusion.cpp
+    campaignwaves.cpp
     scenario.cpp
     scenarioini.cpp
     score.cpp
@@ -99,6 +109,7 @@ set(TIBDAWN_SRC
     shapebtn.cpp
     sidebar.cpp
     slider.cpp
+    smoothmotion.cpp
     smudge.cpp
     sounddlg.cpp
     special.cpp

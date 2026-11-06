@@ -76,6 +76,9 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "siegetank.h"
+#include "campaigndefense.h"
+#include "smoothmotion.h"
 
 /*
 **	Selected objects have a special marking box around them. This is the shapes that are
@@ -276,8 +279,14 @@ void const* ObjectTypeClass::Get_Cameo_Data(void) const
  * HISTORY:                                                                                    *
  *   09/24/1994 JLB : Created.                                                                 *
  *=============================================================================================*/
+ObjectClass::~ObjectClass(void)
+{
+    Smooth_Motion_Forget(this);
+}
+
 ObjectClass::ObjectClass(void)
 {
+    Smooth_Motion_Forget(this);
     Coord = 0xFFFFFFFF; // Some bogus illegal value.
     Next = 0;           // Not part of any object list.
     Trigger = 0;        // No associated trigger.
@@ -955,12 +964,24 @@ bool ObjectClass::Render(bool forced)
             }
         }
 
-        if (Map.Coord_To_Pixel(coord, x, y)) {
+        bool visible = Map.Coord_To_Pixel(coord, x, y);
+        if (!visible && EnemyFusion::Tier(this)>0) {
+            // An enlarged sprite may still overlap the viewport after its centre leaves native culling bounds.
+            x=Lepton_To_Pixel(Coord_X(coord))-Lepton_To_Pixel(Coord_X(Map.TacticalCoord));
+            y=Lepton_To_Pixel(Coord_Y(coord))-Lepton_To_Pixel(Coord_Y(Map.TacticalCoord));
+            int w=0,h=0;Class_Of().Dimensions(w,h);
+            w=MIN(2048,EnemyFusion::Visual_Pixels(this, w));h=MIN(2048,EnemyFusion::Visual_Pixels(this, h));
+            visible=x+w>=0 && y+h>=0 && x-w<WindowList[WINDOW_TACTICAL][WINDOWWIDTH]
+                && y-h<WindowList[WINDOW_TACTICAL][WINDOWHEIGHT];
+        }
+        if (visible) {
 
             /*
             **	Draw the object itself
             */
+            Smooth_Motion_Object_Begin(this, coord);
             Draw_It(x, y, WINDOW_TACTICAL);
+            Smooth_Motion_Object_End();
 
 #ifdef SCENARIO_EDITOR
             /*
@@ -1380,15 +1401,24 @@ ResultType ObjectClass::Take_Damage(int& damage, int distance, WarheadType warhe
     int oldstrength = Strength;
 
     if (oldstrength && damage && !Class_Of().IsImmune) {
-        int maxstrength = Class_Of().MaxStrength;
+        int maxstrength = Campaign_Max_Health(this);
 
         /*
         **	Modify damage based on the warhead type and the armor of the object. This results
         **	in a reduced damage value, but never below 1 damage point.
         */
-        damage = Modify_Damage(damage, warhead, Class_Of().Armor, distance);
+        if (What_Am_I() == RTTI_UNIT && SiegeTank::Is(static_cast<UnitClass const*>(this))
+            && damage > 0 && warhead != WARHEAD_NONE && !Special.IsInert) {
+            // Arclite tanks use one point of flat armor in both modes.
+            int spread = Bound(distance >> Warheads[warhead].SpreadFactor, 0, 16);
+            damage = MAX(1, (damage >> spread) - 1);
+        } else {
+            damage = Modify_Damage(damage, warhead, Class_Of().Armor, distance);
+        }
         if (!damage)
             return (RESULT_NONE);
+        if (damage>0 && What_Am_I()==RTTI_BUILDING && Campaign_SAM_Ground(static_cast<BuildingClass*>(this)))
+            damage=MAX(1,damage/2);
 
         /*
         **	At this point, we KNOW that at least light damage has occurred.
@@ -1706,7 +1736,7 @@ BuildingClass* ObjectClass::Who_Can_Build_Me(bool intheory, bool legal) const
 };
 unsigned ObjectClass::Health_Ratio(void) const
 {
-    return (Cardinal_To_Fixed(Class_Of().MaxStrength, Strength));
+    return (Cardinal_To_Fixed(Campaign_Max_Health(this), Strength));
 };
 int ObjectClass::Full_Name(void) const
 {

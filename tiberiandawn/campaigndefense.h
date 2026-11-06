@@ -1,0 +1,69 @@
+// Player-only campaign defense targeting and SAM conveniences.
+#ifndef CAMPAIGNDEFENSE_H
+#define CAMPAIGNDEFENSE_H
+#include "enemyfusion.h"
+inline bool Campaign_SAM_Ground(TechnoClass const* object)
+{
+    return GameToPlay == GAME_NORMAL && object && object->What_Am_I() == RTTI_BUILDING
+        && object->House && object->House == PlayerPtr && object->House->IsHuman
+        && static_cast<BuildingClass const*>(object)->Class->Type == STRUCT_SAM;
+}
+// Integer simulation ticks round down, with at least one tick per state.
+inline int Campaign_SAM_Attack_Delay(TechnoClass const* object, int ticks)
+{
+    return Campaign_SAM_Ground(object) ? MAX(1, ticks / 4) : ticks;
+}
+inline bool Campaign_SAM_Target_Allowed(BuildingClass const* sam, TARGET target)
+{
+    if (!Target_Legal(target)) return false;
+    if (Campaign_SAM_Ground(sam)) {
+        auto object=As_Techno(target);
+        return !object || (object->IsActive && !object->IsInLimbo && object->Strength>0);
+    }
+    return Is_Target_Aircraft(target) && As_Aircraft(target)->Altitude > 0;
+}
+inline bool Campaign_Defense_Targets_Buildings(TechnoClass const* object)
+{
+    if (GameToPlay != GAME_NORMAL || !object || object->What_Am_I() != RTTI_BUILDING
+        || !object->House || object->House != PlayerPtr || !object->House->IsHuman) return false;
+    StructType type = static_cast<BuildingClass const*>(object)->Class->Type;
+    return type == STRUCT_ATOWER || type == STRUCT_OBELISK || type == STRUCT_SAM;
+}
+inline int Campaign_Defense_Rearm_Delay(TechnoClass const* object,int ticks,bool roundUp=false)
+{
+    if (Campaign_SAM_Ground(object)) return Campaign_SAM_Attack_Delay(object,ticks);
+    return Campaign_Defense_Targets_Buildings(object) ? MAX(1,(ticks+(roundUp?1:0))/2) : ticks;
+}
+void Campaign_SAM_Chain_Start(BulletClass* bullet);
+int Campaign_SAM_Density_Shots(BuildingClass const* sam);
+void Campaign_SAM_Density_Volley(BulletClass* root);
+bool Campaign_SAM_Chain_Impact(BulletClass* bullet,TechnoClass* target);
+void Campaign_SAM_Chain_Forget(BulletClass* bullet);
+void Campaign_SAM_Chain_Reset();
+void Campaign_SAM_Chain_Fixup();
+bool Campaign_SAM_Chain_Save(FileClass& file);
+bool Campaign_SAM_Chain_Load(FileClass& file);
+void Campaign_SAM_Volley_Reset();
+void Campaign_SAM_Volley_Forget(BuildingClass* sam);
+bool Campaign_SAM_Volley_Save(FileClass& file);
+bool Campaign_SAM_Volley_Load(FileClass& file);
+inline bool Campaign_Player_Repair(TechnoClass const* object)
+{
+    return GameToPlay==GAME_NORMAL && object && object->House && object->House==PlayerPtr && object->House->IsHuman;
+}
+inline bool Campaign_Player_Bike(TechnoClass const* object)
+{
+    return Campaign_Player_Repair(object) && object->What_Am_I()==RTTI_UNIT
+        && static_cast<UnitClass const*>(object)->Class->Type==UNIT_BIKE;
+}
+inline int Campaign_Max_Health(ObjectClass const* object)
+{
+    int maximum=object->Class_Of().MaxStrength;
+    if (object->What_Am_I()==RTTI_BUILDING && Campaign_SAM_Ground(static_cast<BuildingClass const*>(object))) maximum*=5;
+    if (object->What_Am_I()==RTTI_UNIT && Campaign_Player_Bike(static_cast<UnitClass const*>(object))) maximum*=2;
+    return EnemyFusion::Health(object,maximum);
+}
+void Campaign_SAM_Health_Reset();
+void Campaign_SAM_Health_Apply(BuildingClass* sam);
+void Campaign_SAM_Health_Apply_All();
+#endif

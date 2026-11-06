@@ -46,6 +46,12 @@
 #include "debugstring.h"
 
 #include <SDL.h>
+#include "renderlayers.h"
+#include "motioninterpolation.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #if ANDROID
 #include <string>
@@ -126,6 +132,91 @@ Uint32 SettingsPixelFormat()
     return SDL_PIXELFORMAT_UNKNOWN;
 }
 
+// Compose original palette-table effects against the interpolated scene at output resolution.
+// SDL/Metal presents the resulting frame; simulation and saved coordinates stay untouched.
+class SmoothCompositor
+{
+    SDL_Texture* texture = nullptr;
+    int width = 0, height = 0;
+public:
+    ~SmoothCompositor() { Clear(); }
+    void Clear() { if (texture) SDL_DestroyTexture(texture); texture=nullptr; }
+    bool Render()
+    {
+        const auto& frame=RenderLayers::frame;
+        if (!frame.ready || !Settings.Video.SmoothMotion || frame.width<=0 || frame.height<=0) return false;
+        int window_w, window_h, output_w, output_h;
+        SDL_GetWindowSize(window, &window_w, &window_h);
+        SDL_GetRendererOutputSize(renderer, &output_w, &output_h);
+        // Keep world interpolation at its previous working resolution. Native
+        // sidebar art is overlaid by SDL at the full Retina output resolution.
+        const int world_w = std::max(1, render_dst.w * window_w / std::max(1, output_w));
+        const int world_h = std::max(1, render_dst.h * window_h / std::max(1, output_h));
+        if (!texture || width!=world_w || height!=world_h) {
+            Clear(); width=world_w; height=world_h;
+            texture=SDL_CreateTexture(renderer,SDL_PIXELFORMAT_RGBA32,SDL_TEXTUREACCESS_STREAMING,width,height);
+            if (!texture) return false;
+            SDL_SetTextureScaleMode(texture,SDL_ScaleModeNearest);
+        }
+        uint32_t colors[256];
+        for (int i=0;i<256;++i) {
+            unsigned char rgba[4]={palette->colors[i].r,palette->colors[i].g,palette->colors[i].b,255};
+            std::memcpy(&colors[i],rgba,4);
+        }
+        const auto presentation=std::chrono::steady_clock::now();
+        RenderLayers::frame.presentation_time=std::chrono::duration<double>(presentation.time_since_epoch()).count();
+        const double fraction=MotionInterpolation::Fraction(
+            std::chrono::duration<double>(presentation-frame.tick_start).count(),frame.duration);
+        const float scale_x=float(width)/frame.width, scale_y=float(height)/frame.height;
+        const auto& pixels=RenderLayers::Compose(width,height,colors,fraction);
+        if (SDL_UpdateTexture(texture,nullptr,pixels.data(),width*4)!=0) return false;
+        SDL_RenderCopy(renderer,texture,nullptr,&render_dst);
+        // Opt-in, bounded diagnostic trace of actual presentation calls, never simulation inputs.
+        static FILE* trace = nullptr;
+        static bool trace_checked = false;
+        static int trace_frames = 0;
+        static bool trace_started = false;
+        if (!trace_checked) {
+            trace_checked = true;
+            const char* path = std::getenv("VANILLA_MOTION_TRACE");
+            if (path && *path) {
+                trace = std::fopen(path, "w");
+                if (trace) std::fprintf(trace, "time_us,logical_tick,fraction,object,x,y,scale_x,scale_y,simulation_pending,raster_hash\n");
+            }
+        }
+        if (trace && trace_frames < 1800) {
+            for (size_t i = 0; i < frame.layers.size(); ++i) {
+                const auto& layer = frame.layers[i];
+                if (!layer.selected || !layer.object) continue;
+                if (!trace_started) {
+                    const auto& history=layer.timeline;
+                    if (history.size()<2 || (history.back().x==history[history.size()-2].x &&
+                                             history.back().y==history[history.size()-2].y)) continue;
+                    trace_started=true;
+                }
+                double dx,dy; RenderLayers::Offset(layer,fraction,dx,dy);
+                uint64_t raster_hash=1469598103934665603ULL;
+                const int left=std::max(0,int((layer.x-8)*scale_x));
+                const int top=std::max(0,int((layer.y-8)*scale_y));
+                const int right=std::min(width,int((layer.x+layer.width+8)*scale_x));
+                const int bottom=std::min(height,int((layer.y+layer.height+8)*scale_y));
+                for (int y=top;y<bottom;++y) for(int x=left;x<right;++x)
+                    raster_hash=(raster_hash^pixels[y*width+x])*1099511628211ULL;
+                auto time = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count();
+                std::fprintf(trace, "%lld,%lu,%.6f,%u,%.6f,%.6f,%.3f,%.3f,%d,%llu\n", (long long)time,
+                             frame.logical_tick, fraction, layer.object, (layer.anchor_x+dx)*scale_x, (layer.anchor_y+dy)*scale_y,
+                             scale_x, scale_y, int(frame.simulation_pending),static_cast<unsigned long long>(raster_hash));
+                std::fflush(trace);
+                if (++trace_frames == 1800) { std::fclose(trace); trace = nullptr; }
+                break;
+            }
+        }
+        return true;
+    }
+};
+static SmoothCompositor smooth_compositor;
+
 static void Update_HWCursor();
 
 #if ANDROID
@@ -156,8 +247,11 @@ void Update_HWCursor_Settings()
     */
     int win_w, win_h;
     SDL_GetRendererOutputSize(renderer, &win_w, &win_h);
-    hwcursor.ScaleX = win_w / (float)hwcursor.GameW;
-    hwcursor.ScaleY = win_h / (float)hwcursor.GameH;
+    int mouse_w, mouse_h;
+    SDL_GetWindowSize(window, &mouse_w, &mouse_h);
+    // SDL mouse coordinates and native cursor sizes use window points, not Retina pixels.
+    hwcursor.ScaleX = mouse_w / (float)hwcursor.GameW;
+    hwcursor.ScaleY = mouse_h / (float)hwcursor.GameH;
 
     /*
     ** Update screen boxing settings.
@@ -259,7 +353,7 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
 
     int win_w = w;
     int win_h = h;
-    int win_flags = 0;
+    int win_flags = SDL_WINDOW_ALLOW_HIGHDPI;
     Uint32 requested_pixel_format = SettingsPixelFormat();
 #ifndef ANDROID
     if (!Settings.Video.Windowed) {
@@ -334,6 +428,12 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
     renderer = SDL_CreateRenderer(window, renderer_index,renderFlags);
 #endif
+    // Interpolated positions need display-paced presentation as well as extra
+    // frames. Otherwise the timer limiter drifts against the display refresh.
+    if (!renderer && Settings.Video.SmoothMotion) {
+        DBG_INFO("VSync renderer unavailable, using timer pacing: %s", SDL_GetError());
+        renderer = SDL_CreateRenderer(window, renderer_index, SDL_RENDERER_TARGETTEXTURE);
+    }
     if (renderer == nullptr) {
         DBG_ERROR("SDL_CreateRenderer failed: %s", SDL_GetError());
         Reset_Video_Mode();
@@ -577,6 +677,8 @@ void Reset_Video_Mode(void)
         hwcursor.Surface = nullptr;
     }
 
+    smooth_compositor.Clear();
+    RenderLayers::Invalidate();
     SDL_DestroyRenderer(renderer);
     renderer = nullptr;
 
@@ -824,6 +926,7 @@ public:
 
     virtual ~VideoSurfaceSDL2()
     {
+        if (detailTexture) SDL_DestroyTexture(detailTexture);
         if (frontSurface == this) {
             frontSurface = nullptr;
         }
@@ -874,11 +977,13 @@ public:
 
     virtual void Blt(const Rect& destRect, VideoSurface* src, const Rect& srcRect, bool mask)
     {
+        if (this == frontSurface) RenderLayers::Invalidate();
         SDL_BlitSurface(((VideoSurfaceSDL2*)src)->surface, (SDL_Rect*)(&srcRect), surface, (SDL_Rect*)&destRect);
     }
 
     virtual void FillRect(const Rect& rect, unsigned char color)
     {
+        if (this == frontSurface) RenderLayers::Invalidate();
         SDL_Rect rectSDL = {rect.X, rect.Y, rect.Width + 1, rect.Height + 1};
         SDL_FillRect(surface, &rectSDL, color);
     }
@@ -909,30 +1014,77 @@ public:
             ** Update hardware cursor visibility.
             */
             SDL_ShowCursor(!Get_Mouse_State());
-        } else if (!Get_Mouse_State() && hwcursor.Surface != nullptr) {
-            /*
-            ** Draw software emulated cursor.
-            */
-            int x, y;
-            SDL_Rect dst;
-
-            Get_Video_Mouse(x, y);
-
-            dst.x = x - hwcursor.HotX;
-            dst.y = y - hwcursor.HotY;
-            dst.w = hwcursor.Surface->w;
-            dst.h = hwcursor.Surface->h;
-
-            SDL_BlitSurface(hwcursor.Surface, nullptr, windowSurface, &dst);
         }
 
         SDL_UpdateTexture(texture, NULL, windowSurface->pixels, windowSurface->pitch);
         SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, NULL, &render_dst);
+        if (!smooth_compositor.Render()) SDL_RenderCopy(renderer, texture, NULL, &render_dst);
+        RenderDetails();
+        RenderCursor();
         SDL_RenderPresent(renderer);
     }
 
 private:
+    // Native sidebar art must also work at unlimited simulation speed and with
+    // motion interpolation disabled. Validate against the live final raster so
+    // menus, tooltips and mission transitions still take precedence.
+    void RenderDetails()
+    {
+        const auto& details = RenderLayers::frame.details;
+        if (details.empty()) return;
+        int cellWidth = 0, cellHeight = 0;
+        for (const auto& detail : details) {
+            cellWidth = std::max(cellWidth, detail.source_width);
+            cellHeight = std::max(cellHeight, detail.source_height);
+        }
+        const int atlasHeight = cellHeight * int(details.size());
+        if (!detailTexture || detailWidth != cellWidth || detailHeight != atlasHeight) {
+            if (detailTexture) SDL_DestroyTexture(detailTexture);
+            detailWidth = cellWidth; detailHeight = atlasHeight;
+            detailTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                              SDL_TEXTUREACCESS_STREAMING, cellWidth, atlasHeight);
+            if (!detailTexture) return;
+            SDL_SetTextureScaleMode(detailTexture, SDL_ScaleModeNearest);
+        }
+        detailPixels.resize(cellWidth * atlasHeight);
+        for (size_t i = 0; i < details.size(); ++i) {
+            const auto& detail = details[i];
+            for (int y = 0; y < detail.source_height; ++y) for (int x = 0; x < detail.source_width; ++x) {
+                const auto color = palette->colors[detail.pixels[y * detail.source_width + x]];
+                unsigned char rgba[4] = {color.r, color.g, color.b, 255};
+                std::memcpy(&detailPixels[(i * cellHeight + y) * cellWidth + x], rgba, 4);
+            }
+        }
+        if (SDL_UpdateTexture(detailTexture, nullptr, detailPixels.data(), cellWidth * 4) != 0) return;
+        const float sx = float(render_dst.w) / surface->w, sy = float(render_dst.h) / surface->h;
+        for (size_t i = 0; i < details.size(); ++i) {
+            const auto& detail = details[i];
+            if (!RenderLayers::Detail_Visible(detail, static_cast<unsigned char*>(surface->pixels),
+                                               surface->w, surface->h, surface->pitch)) continue;
+            SDL_Rect src = {0, int(i) * cellHeight, detail.source_width, detail.source_height};
+            SDL_FRect dst = {render_dst.x + detail.x * sx, render_dst.y + detail.y * sy,
+                             detail.width * sx, detail.height * sy};
+            SDL_RenderCopyF(renderer, detailTexture, &src, &dst);
+        }
+    }
+    void RenderCursor()
+    {
+        const float sx = float(render_dst.w) / surface->w, sy = float(render_dst.h) / surface->h;
+        if (!Settings.Video.HardwareCursor && !Get_Mouse_State() && hwcursor.Surface) {
+            SDL_Texture* cursor = SDL_CreateTextureFromSurface(renderer, hwcursor.Surface);
+            if (cursor) {
+                int x, y; Get_Video_Mouse(x, y);
+                SDL_FRect dst = {render_dst.x + (x - hwcursor.HotX) * sx,
+                                 render_dst.y + (y - hwcursor.HotY) * sy,
+                                 hwcursor.Surface->w * sx, hwcursor.Surface->h * sy};
+                SDL_RenderCopyF(renderer, cursor, nullptr, &dst);
+                SDL_DestroyTexture(cursor);
+            }
+        }
+    }
+    SDL_Texture* detailTexture = nullptr;
+    int detailWidth = 0, detailHeight = 0;
+    std::vector<uint32_t> detailPixels;
     SDL_Surface* surface;
     SDL_Surface* windowSurface;
     SDL_Texture* texture;

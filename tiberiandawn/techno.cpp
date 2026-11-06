@@ -112,6 +112,11 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "enemyfusion.h"
+#include "siegetank.h"
+#include "campaignbike.h"
+#include "campaigndefense.h"
+#include "campaignrepair.h"
 
 /***************************************************************************
 **	Cloaking control values.
@@ -282,6 +287,8 @@ unsigned short TechnoTypeClass::Get_Ownable(void) const
  *=============================================================================================*/
 int TechnoTypeClass::Time_To_Build(HousesType house) const
 {
+    // Native factory stages are 108 ticks of seven frames: about 50 game seconds.
+    if (What_Am_I() == RTTI_UNITTYPE && static_cast<UnitTypeClass const*>(this)->Type == UNIT_SIEGE_TANK) return 108 * 7;
     /*
     **	Base time is the raw cost.
     */
@@ -847,7 +854,7 @@ RadioMessageType TechnoClass::Receive_Message(RadioClass* from, RadioMessageType
             if (House->Available_Money() >= cost) {
 #ifdef OBSOLETE
                 if (Health_Ratio() >= 0x0100) {
-                    Strength = Class_Of().MaxStrength;
+                    Strength = Campaign_Max_Health(this);
                     from->Scatter(true);
                     return (RADIO_NEGATIVE);
                 }
@@ -1018,7 +1025,7 @@ void TechnoClass::Draw_It(int x, int y, WindowNumberType window)
     const bool show_health_bar = (Strength > 0) && !Is_Cloaked(PlayerPtr)
                                  && (Is_Selected_By_Player()
                                      || ((Special.HealthBarDisplayMode == SpecialClass::HB_DAMAGED)
-                                         && (Strength < Techno_Type_Class()->MaxStrength))
+                                         && (Strength < Campaign_Max_Health(this)))
                                      || (Special.HealthBarDisplayMode == SpecialClass::HB_ALWAYS));
 
     /*
@@ -1027,6 +1034,8 @@ void TechnoClass::Draw_It(int x, int y, WindowNumberType window)
     */
     int width, height;
     Class_Of().Dimensions(width, height);
+    width = MIN(2048, EnemyFusion::Visual_Pixels(this, width));
+    height = MIN(2048, EnemyFusion::Visual_Pixels(this, height));
     int lx = width / 2;
     int ly = height / 2;
     int dx = width / 5;
@@ -1059,7 +1068,7 @@ void TechnoClass::Draw_It(int x, int y, WindowNumberType window)
         **	The infantry select box should be a bit higher than normal.
         */
         if (What_Am_I() == RTTI_INFANTRY) {
-            y -= 6;
+            y -= EnemyFusion::Visual_Pixels(this, 6);
         }
 
         if (What_Am_I() == RTTI_BUILDING && ((BuildingTypeClass const&)Class_Of()).Type == STRUCT_BARRACKS) {
@@ -1389,7 +1398,7 @@ bool TechnoClass::Evaluate_Object(ThreatType method, int mask, int range, Techno
     **	Special case so that SAM site doesn't fire on aircraft that are landed.
     */
     if (otype == RTTI_AIRCRAFT && What_Am_I() == RTTI_BUILDING && *((BuildingClass*)this) == STRUCT_SAM) {
-        if (((AircraftClass*)object)->Altitude == 0)
+        if (((AircraftClass*)object)->Altitude == 0 && !Campaign_SAM_Ground(this))
             return (false);
     }
 
@@ -1421,7 +1430,8 @@ bool TechnoClass::Evaluate_Object(ThreatType method, int mask, int range, Techno
     **	SPECIAL CASE: Friendly units won't automatically fire on buildings
     **	if the building is not aggressive.
     */
-    if (House->IsHuman && otype == RTTI_BUILDING && tclass->Primary == WEAPON_NONE)
+    if (House->IsHuman && otype == RTTI_BUILDING && tclass->Primary == WEAPON_NONE
+        && !Campaign_Defense_Targets_Buildings(this))
         return (false);
 
     /*
@@ -1563,6 +1573,20 @@ bool TechnoClass::Evaluate_Cell(ThreatType method,
     **	techno object there, then bail.
     */
     CellClass* cellptr = &Map[cell];
+    if (Campaign_SAM_Ground(this)) {
+        // Infantry share cells. An excluded/dead first occupant must not hide
+        // other legal targets behind it in the same occupancy list.
+        for (auto occupant=cellptr->Cell_Occupier();occupant;occupant=occupant->Next) {
+            if (!occupant->IsActive || !occupant->Is_Techno()) continue;
+            auto candidate=static_cast<TechnoClass const*>(occupant);
+            if (candidate->Strength<=0) continue;
+            if (Evaluate_Object(method,mask,range,candidate,value)) {
+                *object=candidate;
+                return true;
+            }
+        }
+        return false;
+    }
     TechnoClass const* tentative = (TechnoClass const*)cellptr->Cell_Occupier();
     while (tentative) {
         if (tentative->Is_Techno() && !House->Is_Ally(tentative))
@@ -1904,6 +1928,8 @@ void TechnoClass::AI(void)
     CargoClass::AI();
     RadioClass::AI();
     DoorClass::AI();
+    if(What_Am_I()==RTTI_UNIT)Campaign_Bike_Health_Apply(static_cast<UnitClass*>(this));
+    Campaign_Auto_Repair(this);
 
     /*
     ** Handle decision to re-cloak here. Process the cloaking/decloaking operation.
@@ -2276,10 +2302,12 @@ void TechnoClass::Assign_Target(TARGET target)
  *=============================================================================================*/
 int TechnoClass::Rearm_Delay(bool second) const
 {
+    if (SiegeTank::Is(this)) return *static_cast<UnitClass const*>(this) == UNIT_SIEGE_MODE ? 47 : 23;
+    if(Campaign_Bike_Active(this)) return MAX(1,(((int)Weapons[WEAPON_DRAGON].ROF * House->ROFBias)+3)/2);
     if (second) {
-        return (((int)Weapons[Techno_Type_Class()->Primary].ROF * House->ROFBias) + 3);
+        return Campaign_Defense_Rearm_Delay(this, ((int)Weapons[Techno_Type_Class()->Primary].ROF * House->ROFBias) + 3);
     }
-    return (9);
+    return Campaign_Defense_Rearm_Delay(this, 9, true);
 }
 
 /***********************************************************************************************
@@ -2314,6 +2342,7 @@ BulletClass* TechnoClass::Fire_At(TARGET target, int which)
         return (NULL);
     }
     WeaponTypeClass const* weapon = (which == 0) ? &Weapons[tclass.Primary] : &Weapons[tclass.Secondary];
+    if(which==0 && Campaign_Bike_Active(this)) weapon=&Weapons[WEAPON_NIKE];
     BulletTypeClass const& btype = BulletTypeClass::As_Reference(weapon->Fires);
 
     /*
@@ -2358,6 +2387,7 @@ BulletClass* TechnoClass::Fire_At(TARGET target, int which)
     **	created.
     */
     int firepower = (weapon->Attack > 0) ? ((int)weapon->Attack * House->FirepowerBias) : 0;
+    firepower = EnemyFusion::Firepower(this, firepower);
     bullet = new BulletClass(weapon->Fires);
     if (bullet) {
         bullet->Assign_Target(target);
@@ -2380,6 +2410,8 @@ BulletClass* TechnoClass::Fire_At(TARGET target, int which)
             // object->IsActive, object->IsInLimbo);Get_Key();
             bullet->Payback = this;
             bullet->Strength = (short)firepower;
+            Campaign_SAM_Chain_Start(bullet);
+            Campaign_SAM_Density_Volley(bullet);
         } else {
             delete bullet;
         }
@@ -2784,6 +2816,7 @@ ActionType TechnoClass::What_Action(CELL cell) const
  *=============================================================================================*/
 bool TechnoClass::Can_Player_Move(void) const
 {
+    if (SiegeTank::Is(this) && (*static_cast<UnitClass const*>(this) == UNIT_SIEGE_MODE || SiegeTank::Transitioning(static_cast<UnitClass const*>(this)))) return false;
     return (PlayerPtr == House);
 }
 
@@ -2856,7 +2889,7 @@ bool TechnoClass::Can_Repair(void) const
     if (What_Am_I() == RTTI_UNIT || What_Am_I() == RTTI_INFANTRY || What_Am_I() == RTTI_AIRCRAFT) {
         return (false);
     }
-    return (Techno_Type_Class()->IsRepairable && Strength != Class_Of().MaxStrength);
+    return (Techno_Type_Class()->IsRepairable && Strength != Campaign_Max_Health(this));
 }
 
 /***********************************************************************************************
@@ -2888,6 +2921,20 @@ int TechnoClass::Weapon_Range(int which) const
         break;
     }
     if (weapon != WEAPON_NONE) {
+        // Campaign range bonus follows the local player's current ownership.
+        if (weapon == WEAPON_OBELISK_LASER && What_Am_I() == RTTI_BUILDING
+            && static_cast<BuildingClass const*>(this)->Class->Type == STRUCT_OBELISK
+            && GameToPlay == GAME_NORMAL && House && House == PlayerPtr && House->IsHuman) {
+            return (Weapons[weapon].Range * 2);
+        }
+        if (weapon == WEAPON_TOW_TWO && What_Am_I() == RTTI_BUILDING
+            && static_cast<BuildingClass const*>(this)->Class->Type == STRUCT_ATOWER
+            && GameToPlay == GAME_NORMAL && House && House == PlayerPtr && House->IsHuman) {
+            return (Weapons[weapon].Range * 3);
+        }
+        if (weapon == WEAPON_NIKE && Campaign_SAM_Ground(this)) {
+            return (20 * ICON_LEPTON_W);
+        }
         if (weapon == WEAPON_NIKE && GameToPlay == GAME_NORMAL) {
             return (Weapons[weapon].Range * 2);
         }
@@ -3023,6 +3070,7 @@ bool TechnoClass::Captured(HouseClass* newowner)
         */
         House = newowner;
         IsOwnedByPlayer = (House == PlayerPtr);
+        if(What_Am_I()==RTTI_UNIT)Campaign_Bike_Health_Apply(static_cast<UnitClass*>(this));
 
         return (true);
     }
@@ -3233,7 +3281,7 @@ void TechnoClass::Record_The_Kill(TechnoClass* source)
         House->UnitsLost++;
         if (source) {
             if (GameToPlay == GAME_INTERNET) {
-                source->House->DestroyedUnits.Increment_Unit_Total(((UnitClass*)this)->Class->Type);
+                if (((UnitClass*)this)->Class->Type <= UNIT_STEG) source->House->DestroyedUnits.Increment_Unit_Total(((UnitClass*)this)->Class->Type);
             }
             source->House->UnitsKilled[Owner()]++;
         }

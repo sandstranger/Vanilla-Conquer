@@ -53,6 +53,8 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "campaigndefense.h"
+#include "campaigntraffic.h"
 
 DriveClass::DriveClass(void)
     : Class(0)
@@ -952,7 +954,8 @@ bool DriveClass::Start_Of_Move(void)
             return (false);
         }
         if (!Basic_Path()) {
-            if (Distance(NavCom) < 0x0280 && (Mission == MISSION_MOVE || Mission == MISSION_GUARD_AREA)) {
+            if (Distance(NavCom) < 0x0280 && (Mission == MISSION_MOVE || Mission == MISSION_GUARD_AREA)
+                && !Campaign_Traffic_Wait(this)) {
                 Assign_Destination(TARGET_NONE);
             } else {
 
@@ -985,7 +988,7 @@ bool DriveClass::Start_Of_Move(void)
 
                 if (TryTryAgain) {
                     TryTryAgain--;
-                } else {
+                } else if (!Campaign_Traffic_Wait(this)) {
                     Assign_Destination(TARGET_NONE);
                     if (IsNewNavCom)
                         Sound_Effect(VOC_SCOLD);
@@ -1070,7 +1073,8 @@ bool DriveClass::Start_Of_Move(void)
 
         if (cando != MOVE_OK) {
 
-            if (Mission == MISSION_MOVE && House->IsHuman && Distance(NavCom) < 0x0200) {
+            if (Mission == MISSION_MOVE && House->IsHuman && Distance(NavCom) < 0x0200
+                && !Campaign_Traffic_Wait(this)) {
                 Assign_Destination(TARGET_NONE);
             }
 
@@ -1143,7 +1147,7 @@ bool DriveClass::Start_Of_Move(void)
         /*
         **	A damaged unit has a reduced speed.
         */
-        if ((Class->MaxStrength >> 1) > Strength) {
+        if ((Campaign_Max_Health(this) >> 1) > Strength) {
             speed -= (speed >> 2); // Three quarters speed.
         }
         if ((speed != Speed) /* || !SpeedAdd*/) {

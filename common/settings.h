@@ -29,9 +29,12 @@ public:
         std::string BoxingAspectRatio;
         int Width;
         int Height;
+        int GameWidth;
+        int GameHeight;
         int FrameLimit;
         int InterpolationMode;
         bool HardwareCursor;
+        bool SmoothMotion;
         bool DOSMode;
         int ButtonStyle;
         std::string Scaler;
@@ -42,6 +45,7 @@ public:
     struct
     {
         bool MouseWheelScrolling;
+        bool CampaignAllTech;
     } Options;
 };
 

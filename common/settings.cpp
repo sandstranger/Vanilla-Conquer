@@ -63,6 +63,7 @@ SettingsClass::SettingsClass()
     Mouse.ControllerEnabled = true;
 #endif
     Options.MouseWheelScrolling = true;
+    Options.CampaignAllTech = false;
 
     Mouse.ControllerPointerSpeed = 10;
 
@@ -79,6 +80,8 @@ SettingsClass::SettingsClass()
 #else
     Video.Boxing = false;
 #endif
+    Video.GameWidth = 640;
+    Video.GameHeight = 400;
     Video.BoxingAspectRatio = "16:10";
     Video.FrameLimit = 120;
     Video.InterpolationMode = 2;
@@ -88,6 +91,7 @@ SettingsClass::SettingsClass()
 #else
     Video.DOSMode = true;
 #endif
+    Video.SmoothMotion = true;
     Video.Scaler = "nearest";
     Video.Driver = "default";
     Video.PixelFormat = "default";
@@ -96,6 +100,7 @@ SettingsClass::SettingsClass()
 void SettingsClass::Load(INIClass& ini)
 {
     char buf[128];
+    Options.CampaignAllTech = ini.Get_Bool("Options", "CampaignAllTech", Options.CampaignAllTech);
 
     /*
     ** Mouse settings
@@ -136,6 +141,9 @@ void SettingsClass::Load(INIClass& ini)
     Video.DOSMode = ini.Get_Bool("Video", "DOSMode", Video.DOSMode);
     Video.FrameLimit = g_frameRateLimit;
 #endif
+    Video.GameWidth = Bound(ini.Get_Int("Video", "GameWidth", Video.GameWidth), 640, 1280);
+    Video.GameHeight = Bound(ini.Get_Int("Video", "GameHeight", Video.GameHeight), 400, 800);
+    Video.SmoothMotion = ini.Get_Bool("Video", "SmoothMotion", Video.SmoothMotion);
     Video.Scaler = ini.Get_String("Video", "Scaler", Video.Scaler);
     Video.Driver = ini.Get_String("Video", "Driver", Video.Driver);
     Video.PixelFormat = ini.Get_String("Video", "PixelFormat", Video.PixelFormat);
@@ -164,6 +172,7 @@ void SettingsClass::Load(INIClass& ini)
 
 void SettingsClass::Save(INIClass& ini)
 {
+    ini.Put_Bool("Options", "CampaignAllTech", Options.CampaignAllTech);
     /*
     ** Mouse settings
     */
@@ -183,9 +192,12 @@ void SettingsClass::Save(INIClass& ini)
     ini.Put_String("Video", "BoxingAspectRatio", Video.BoxingAspectRatio);
     ini.Put_Int("Video", "Width", Video.Width);
     ini.Put_Int("Video", "Height", Video.Height);
+    ini.Put_Int("Video", "GameWidth", Video.GameWidth);
+    ini.Put_Int("Video", "GameHeight", Video.GameHeight);
     ini.Put_Int("Video", "FrameLimit", Video.FrameLimit);
     ini.Put_Bool("Video", "HardwareCursor", Video.HardwareCursor);
     ini.Put_Bool("Video", "DOSMode", Video.DOSMode);
+    ini.Put_Bool("Video", "SmoothMotion", Video.SmoothMotion);
     ini.Put_String("Video", "Scaler", Video.Scaler);
     ini.Put_String("Video", "Driver", Video.Driver);
     ini.Put_String("Video", "PixelFormat", Video.PixelFormat);

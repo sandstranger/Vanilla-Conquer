@@ -45,6 +45,13 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "enemyfusion.h"
+#include "campaignenemies.h"
+#include "campaignperks.h"
+#include "campaigncredits.h"
+#include "campaigntech.h"
+#include "campaigndefense.h"
+#include "campaignbike.h"
 
 extern bool DLLSave(FileClass& file);
 extern bool DLLLoad(FileClass& file);
@@ -250,7 +257,7 @@ bool Save_Game(const char* file_name, const char* descr)
     /*
     **	Save miscellaneous variables.
     */
-    if (!Save_Misc_Values(file)) {
+    if (!Save_Misc_Values(file) || !Campaign_Enemies_Save(file)) {
         file.Close();
         Decode_All_Pointers();
         return (false);
@@ -480,19 +487,31 @@ bool Load_Game(const char* file_name)
     /*
     **	Load miscellaneous variables, including the map size & the Theater
     */
-    if (!Load_Misc_Values(file)) {
+    if (!Load_Misc_Values(file) || !Campaign_Enemies_Load(file)) {
         file.Close();
         return (false);
     }
 
     file.Close();
     Decode_All_Pointers();
+    // Jurassic mode is selected by the loaded campaign; it is not serialized in Special.
+    Special.IsJurassic = (ScenPlayer == SCEN_PLAYER_JP);
+    if (!EnemyFusion::Fixup()) return false;
+    Campaign_SAM_Health_Apply_All();
+    Campaign_Bike_Health_Apply_All();
+    Campaign_SAM_Chain_Fixup();
     Map.Init_IO();
     Map.Flag_To_Redraw(true);
 
     Fixup_Scenario();
+    Apply_Campaign_Unlimited_Power(PlayerPtr);
+    // Legacy frame-zero starts may contain the former fixed 50,000 balance.
+    if (Frame == 0) Restore_Campaign_Starting_Credits();
 
     ScenarioInit = 0;
+    Campaign_Enemies_Apply();
+    // Old saves may contain a sidebar calculated before campaign unlock was enabled.
+    if (Campaign_All_Tech(PlayerPtr)) PlayerPtr->IsRecalcNeeded = true;
 
     /*
     ** Fixup remap tables. ST - 2/28/2020 1:50PM
@@ -935,6 +954,12 @@ void Decode_All_Pointers(void)
 
     case HOUSE_JP:
         ScenPlayer = SCEN_PLAYER_JP;
+        break;
+
+    case HOUSE_MULTI4:
+        // Jurassic campaign humans (and its dinosaur finale) use Multi4.
+        // Resolve this from the saved owner, never from the previous game.
+        if (GameToPlay == GAME_NORMAL) ScenPlayer = SCEN_PLAYER_JP;
         break;
     }
     Check_Ptr(PlayerPtr, __FILE__, __LINE__);

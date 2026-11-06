@@ -46,6 +46,8 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "siegetank.h"
+#include "campaigndefense.h"
 
 #define GRAVITY 3
 
@@ -151,6 +153,7 @@ void* BulletClass::operator new(size_t) noexcept
 void BulletClass::operator delete(void* ptr)
 {
     if (ptr) {
+        Campaign_SAM_Chain_Forget((BulletClass*)ptr);
         ((BulletClass*)ptr)->IsActive = false;
     }
     Bullets.Free((BulletClass*)ptr);
@@ -359,6 +362,9 @@ void BulletClass::AI(void)
     **	map.
     */
     case IMPACT_EDGE:
+        // Physics retains the last valid world coordinate. A player SAM chain
+        // must use its miss path before this projectile is discarded as well.
+        Campaign_SAM_Chain_Impact(this,nullptr);
         //			if (IsLocked) {
         Mark();
         Delete_This();
@@ -425,7 +431,11 @@ void BulletClass::AI(void)
             /*
             **	Non-aircraft targets apply damage to the ground.
             */
-            if (!Is_Target_Aircraft(TarCom) || As_Aircraft(TarCom)->In_Which_Layer() == LAYER_GROUND) {
+            if (SiegeTank::Impact(this,TarCom)) {
+                // Dedicated tank impact and three-ring siege splash.
+            } else if (Campaign_SAM_Chain_Impact(this,As_Techno(TarCom))) {
+                // The direct hit and up to five travelling ricochets replace splash.
+            } else if (!Is_Target_Aircraft(TarCom) || As_Aircraft(TarCom)->In_Which_Layer() == LAYER_GROUND) {
                 Explosion_Damage(Coord, Strength, Payback, Class->Warhead);
             } else {
 

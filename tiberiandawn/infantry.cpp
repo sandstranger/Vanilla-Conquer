@@ -79,6 +79,9 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "enemyfusion.h"
+#include "campaigntraffic.h"
+#include "campaignenemies.h"
 #include "ccini.h"
 
 int const InfantryClass::HumanShape[32] = {0, 0, 7, 7, 7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4,
@@ -234,6 +237,7 @@ InfantryClass::InfantryClass(InfantryType classid, HousesType house)
     : Class(&InfantryTypeClass::As_Reference(classid))
     , FootClass(house)
 {
+    Campaign_Enemies_Forget(this);
 
     /*
     **	For two shooters, clear out the second shot flag -- it will be set the first time
@@ -293,6 +297,7 @@ InfantryClass::InfantryClass(InfantryType classid, HousesType house)
  *=============================================================================================*/
 InfantryClass::~InfantryClass(void)
 {
+    Campaign_Enemies_Forget(this);
     if (GameActive && Class) {
 #ifdef USE_RA_AI
         //
@@ -459,10 +464,7 @@ ResultType InfantryClass::Take_Damage(int& damage, int distance, WarheadType war
         switch (warhead) {
         case WARHEAD_FEEDME:
             if (source) {
-                source->Strength += 30;
-                if (source->Strength > source->Class_Of().MaxStrength) {
-                    source->Strength = source->Class_Of().MaxStrength;
-                }
+                source->Strength = MIN(EnemyFusion::Health(source, source->Class_Of().MaxStrength), int(source->Strength) + 30);
             }
             // Fall thru to WARHEAD_SA:
 
@@ -584,8 +586,8 @@ void InfantryClass::Draw_It(int x, int y, WindowNumberType window)
     if (!shapefile)
         return;
 
-    y += 4;
-    x -= 2;
+    y += EnemyFusion::Visual_Pixels(this, 4);
+    x -= EnemyFusion::Visual_Pixels(this, 2);
 
     /*
     **	Fetch the basic body shape pointer. This requires taking into account
@@ -1348,11 +1350,11 @@ void InfantryClass::AI(void)
                     }
                     if (!Basic_Path()) {
                         // Mono_Printf("Infantry Basic_Path is failing.\n");Get_Key();
-                        if (Distance(NavCom) < 0x0280 && !IsTethered) {
+                        if (Distance(NavCom) < 0x0280 && !IsTethered && !Campaign_Traffic_Wait(this)) {
                             Assign_Destination(TARGET_NONE);
                         } else {
-                            if (TryTryAgain) {
-                                TryTryAgain--;
+                            if (TryTryAgain || Campaign_Traffic_Wait(this)) {
+                                if(TryTryAgain) TryTryAgain--;
                             } else {
                                 if (IsNewNavCom)
                                     Sound_Effect(VOC_SCOLD);
@@ -1385,7 +1387,7 @@ void InfantryClass::AI(void)
                 if (Can_Enter_Cell(acell) != MOVE_OK) {
 
                     if ((Mission == MISSION_MOVE || Mission == MISSION_ENTER) && !IsTethered && House->IsHuman
-                        && Distance(NavCom) < 0x0200) {
+                        && Distance(NavCom) < 0x0200 && !Campaign_Traffic_Wait(this)) {
                         Assign_Destination(TARGET_NONE);
                     }
 

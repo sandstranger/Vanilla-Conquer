@@ -75,6 +75,8 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "campaigntech.h"
+#include "common/renderlayers.h"
 #include "settings.h"
 
 /*
@@ -171,6 +173,24 @@ SidebarClass::SidebarClass(void)
 void SidebarClass::One_Time(void)
 {
     PowerClass::One_Time();
+    Configure_Layout();
+    Column[0].One_Time(0);
+    Column[1].One_Time(1);
+
+    /*
+    **	Load the sidebar shape in at this time. (Hi-Res sidebar is theater dependant)
+    */
+    if (SidebarShape1 == NULL) {
+        SidebarShape1 = Hires_Retrieve("SIDE1.SHP");
+    }
+    if (SidebarShape2 == NULL) {
+        SidebarShape2 = Hires_Retrieve("SIDE2.SHP");
+    }
+}
+
+void SidebarClass::Configure_Layout(void)
+{
+    Configure_Power_Layout();
     /*
     ** Set up the pixel offsets and widths and heights used to render the
     ** sidebar.  They are now variables because we need to change them for
@@ -182,7 +202,10 @@ void SidebarClass::One_Time(void)
     SideY = Map.RadY + Map.RadHeight + 1;
     SideWidth = SeenBuff.Get_Width() - SideX;
     SideHeight = SeenBuff.Get_Height() - SideY;
-    MaxVisible = 4;
+    SidebarLayout::ConfigureRows(SeenBuff.Get_Height(), SideY + 13 * factor + 1,
+                                 SidebarLayout::IconHeight * factor,
+                                 Get_Build_Frame_Height(Hires_Retrieve("STRIPUP.SHP")));
+    MaxVisible = SidebarLayout::VisibleCount();
     ButtonHeight = 9 * factor;
     TopHeight = ButtonHeight + (4 * factor);
 
@@ -196,8 +219,8 @@ void SidebarClass::One_Time(void)
     */
     WindowList[WINDOW_SIDEBAR][WINDOWX] = SideX + PowWidth;
     WindowList[WINDOW_SIDEBAR][WINDOWY] = SideY + TopHeight;
-    WindowList[WINDOW_SIDEBAR][WINDOWWIDTH] = SideWidth;
-    WindowList[WINDOW_SIDEBAR][WINDOWHEIGHT] = (MaxVisible * (StripClass::OBJECT_HEIGHT * factor));
+    WindowList[WINDOW_SIDEBAR][WINDOWWIDTH] = SideWidth - PowWidth;
+    WindowList[WINDOW_SIDEBAR][WINDOWHEIGHT] = (SidebarLayout::ActiveRows() * SidebarLayout::IconHeight * factor);
 
     if (factor == 1) {
         WindowList[WINDOW_SIDEBAR][WINDOWY] += 1;
@@ -208,7 +231,7 @@ void SidebarClass::One_Time(void)
     **	Set up the coordinates for the sidebar strips. These coordinates are for
     **	the upper left corner.
     */
-    int width = (SideWidth - PowWidth) - (((StripClass::STRIP_WIDTH)*factor) << 1);
+    int width = (SideWidth - PowWidth) - ((StripClass::STRIP_WIDTH * factor) << 1);
     int spacing = width / 3;
 
     Column[0].X = SideX + PowWidth + spacing;
@@ -216,18 +239,9 @@ void SidebarClass::One_Time(void)
     Column[1].X = Column[0].X + (StripClass::STRIP_WIDTH * factor) + spacing - 1;
     Column[1].Y = SideY + TopHeight + 1;
 
-    Column[0].One_Time(0);
-    Column[1].One_Time(1);
+    Column[0].Configure_Layout();
+    Column[1].Configure_Layout();
 
-    /*
-    **	Load the sidebar shape in at this time. (Hi-Res sidebar is theater dependant)
-    */
-    if (SidebarShape1 == NULL) {
-        SidebarShape1 = Hires_Retrieve("SIDE1.SHP");
-    }
-    if (SidebarShape2 == NULL) {
-        SidebarShape2 = Hires_Retrieve("SIDE2.SHP");
-    }
 }
 
 /***********************************************************************************************
@@ -244,6 +258,7 @@ void SidebarClass::One_Time(void)
  *=============================================================================================*/
 void SidebarClass::Init_Clear(void)
 {
+    RenderLayers::Clear_Details();
     PowerClass::Init_Clear();
 
     IsToRedraw = true;
@@ -271,6 +286,9 @@ void SidebarClass::Init_Clear(void)
  *=============================================================================================*/
 void SidebarClass::Init_IO(void)
 {
+    RenderLayers::Clear_Details();
+    Configure_Layout(); // Recompute geometry after loading an old native save.
+
 #if (FRENCH)
     const char* repair_shp = "REPAIRF.SHP";
     const char* sell_shp = "SELLF.SHP";
@@ -341,18 +359,18 @@ void SidebarClass::Init_IO(void)
             ShapeButtonClass* SBCUpgrade = (ShapeButtonClass*)Upgrade;
             ShapeButtonClass* SBCZoom = (ShapeButtonClass*)Zoom;
 
-            Repair->X = 484;
-            Repair->Y = 160;
+            Repair->X = SideX + PowWidth + 4;
+            Repair->Y = SideY + 1;
             SBCRepair->ReflectButtonState = true;
             SBCRepair->Set_Shape(Hires_Retrieve(repair_shp));
 
-            Upgrade->X = 480 + 57;
-            Upgrade->Y = 160;
+            Upgrade->X = SideX + PowWidth + (SideWidth - PowWidth - 52) / 2;
+            Upgrade->Y = SideY + 1;
             SBCUpgrade->ReflectButtonState = true;
             SBCUpgrade->Set_Shape(Hires_Retrieve(sell_shp));
 
-            Zoom->X = 480 + 110;
-            Zoom->Y = 160;
+            Zoom->X = SeenBuff.Get_Width() - 54;
+            Zoom->Y = SideY + 1;
             SBCZoom->Set_Shape(Hires_Retrieve(map_shp));
         } else {
             TextButtonClass* TBCRepair = (TextButtonClass*)Repair;
@@ -368,8 +386,8 @@ void SidebarClass::Init_IO(void)
             TBCZoom->Set_Text("Map");
             TBCZoom->Set_Style(TPF_6POINT | TPF_NOSHADOW | TPF_CENTER);
 
-            Repair->X = 242;
-            Repair->Y = 80;
+            Repair->X = SideX + PowWidth + 2;
+            Repair->Y = SideY + 1;
             Repair->Width = 32;
             Repair->Height = 9;
 
@@ -419,6 +437,8 @@ void SidebarClass::Init_IO(void)
             Activate(1);
             //			Background.Zap();
             //			Add_A_Button(Background);
+        } else {
+            Set_View_Dimensions(0, Map.Get_Tab_Height());
         }
     }
 }
@@ -773,35 +793,13 @@ void SidebarClass::Draw_It(bool complete)
             // CC_Draw_Shape(SidebarShape1, (int)complete, SideX, 158, WINDOW_MAIN, SHAPE_WIN_REL);
             // CC_Draw_Shape(SidebarShape2, (int)complete, SideX, 158+118, WINDOW_MAIN, SHAPE_WIN_REL);
 
-            if (Get_Resolution_Factor() == 0) {
-                if (complete) {
-                    LogicPage->Fill_Rect(
-                        SideX + Map.PowWidth, SideY, SideX + SideWidth - 1, SideY + SideHeight - 1, LTGREY);
-
-                    // Draw rectangle covering "Repair", "Sell", and "Map Buttons"
-                    LogicPage->Fill_Rect(SideX, SideY - 1, SideX + SideWidth, SideY + TopHeight - 1, LTGREY);
-                }
-
-                // Draw a small rectangle strip between sidebar button strip to
-                // erase helpbox messages when mouse is moved from the right
-                // strip.
-                LogicPage->Fill_Rect(Column[0].X + Column[0].ObjectWidth + 1,
-                                     SideY + TopHeight + 1,
-                                     Column[1].X,
-                                     SideY + SideHeight - 1,
-                                     LTGREY);
-
-                Draw_Box(SideX + Map.PowWidth,
-                         SideY + TopHeight,
-                         SideWidth - Map.PowWidth,
-                         SideHeight - TopHeight,
-                         BOXSTYLE_RAISED,
-                         false);
-            } else {
-                LogicPage->Draw_Line(SideX, 157, SeenBuff.Get_Width() - 1, 157, 0);
-                CC_Draw_Shape(SidebarShape1, 0, SideX, 158, WINDOW_MAIN, SHAPE_WIN_REL);
-                CC_Draw_Shape(SidebarShape2, 0, SideX, 158 + 118, WINDOW_MAIN, SHAPE_WIN_REL);
-            }
+            LogicPage->Fill_Rect(SideX + PowWidth, SideY - 1, SeenBuff.Get_Width() - 1,
+                                 SeenBuff.Get_Height() - 1, DKGREY);
+            Draw_Box(SideX + PowWidth, SideY - 1, SideWidth - PowWidth, SideHeight + 1,
+                     BOXSTYLE_RAISED, false);
+            LogicPage->Draw_Line(Column[1].X - 2, SideY + TopHeight,
+                                 Column[1].X - 2, SeenBuff.Get_Height() - 1, BLACK);
+            complete = true;
 
             //  Repair.Draw_Me(true);
             //  Upgrade.Draw_Me(true);
@@ -1146,11 +1144,7 @@ void SidebarClass::StripClass::One_Time(int)
     static const char* _file[3] = {"ION", "ATOM", "BOMB"};
     int factor = Get_Resolution_Factor();
 
-    ObjectWidth = OBJECT_WIDTH << factor;
-    ObjectHeight = OBJECT_HEIGHT << factor;
-    StripWidth = STRIP_WIDTH << factor;
-    LeftEdgeOffset = (StripWidth - ObjectWidth) >> 1;
-    ButtonSpacingOffset = (StripWidth - ((BUTTON_WIDTH << factor) << 1)) / 3;
+    Configure_Layout();
 
     /*
     ** Sidebar is player team specific in Hires
@@ -1170,6 +1164,17 @@ void SidebarClass::StripClass::One_Time(int)
         _makepath(fullname, NULL, NULL, buffer, ".SHP");
         SpecialShapes[lp] = MFCD::Retrieve(fullname);
     }
+}
+
+void SidebarClass::StripClass::Configure_Layout(void)
+{
+    int factor = Get_Resolution_Factor();
+    ObjectWidth = (OBJECT_WIDTH << factor) * 3 / 4;
+    ObjectHeight = (OBJECT_HEIGHT << factor) * 3 / 4;
+    StripWidth = STRIP_WIDTH << factor;
+    LeftEdgeOffset = (1 << factor);
+    ButtonSpacingOffset = (StripWidth - ((BUTTON_WIDTH << factor) << 1)) / 3;
+
 }
 
 /***********************************************************************************************
@@ -1242,26 +1247,31 @@ void SidebarClass::StripClass::Init_Clear(void)
 void SidebarClass::StripClass::Init_IO(int id)
 {
     ID = id;
+    TopIndex = SidebarLayout::ClampTop(TopIndex, BuildableCount);
+    Scroller = Slid = 0;
+    IsScrolling = false;
 
     UpButton[ID].IsSticky = true;
     UpButton[ID].ID = BUTTON_UP + id;
     UpButton[ID].X = X + ButtonSpacingOffset + 1;
-    UpButton[ID].Y = Y + MAX_VISIBLE * ObjectHeight - 1;
+    UpButton[ID].Y = Y + SidebarLayout::ActiveRows() * ObjectHeight - 1;
 
     UpButton[ID].Set_Shape(Hires_Retrieve("STRIPUP.SHP"));
+    UpButton[ID].Y = SeenBuff.Get_Height() - UpButton[ID].Height;
 
     DownButton[ID].IsSticky = true;
     DownButton[ID].ID = BUTTON_DOWN + id;
     DownButton[ID].X = UpButton[ID].X + UpButton[ID].Width + ButtonSpacingOffset - 2;
-    DownButton[ID].Y = Y + MAX_VISIBLE * ObjectHeight - 1;
+    DownButton[ID].Y = Y + SidebarLayout::ActiveRows() * ObjectHeight - 1;
 
     DownButton[ID].Set_Shape(Hires_Retrieve("STRIPDN.SHP"));
+    DownButton[ID].Y = SeenBuff.Get_Height() - DownButton[ID].Height;
 
-    for (int index = 0; index < MAX_VISIBLE; index++) {
+    for (int index = 0; index < Map.MaxVisible; index++) {
         SelectClass& g = SelectButton[ID][index];
         g.ID = BUTTON_SELECT;
-        g.X = X;
-        g.Y = Y + (ObjectHeight * index);
+        g.X = X + LeftEdgeOffset + SidebarLayout::Column(index) * (ObjectWidth + (1 << Get_Resolution_Factor()));
+        g.Y = Y + ObjectHeight * SidebarLayout::Row(index) - 1;
         g.Width = ObjectWidth;
         g.Height = ObjectHeight;
         g.Set_Owner(*this, index);
@@ -1349,7 +1359,7 @@ void SidebarClass::StripClass::Activate(void)
     DownButton[ID].Zap();
     Map.Add_A_Button(DownButton[ID]);
 
-    for (int index = 0; index < MAX_VISIBLE; index++) {
+    for (int index = 0; index < Map.MaxVisible; index++) {
         SelectButton[ID][index].Zap();
         Map.Add_A_Button(SelectButton[ID][index]);
     }
@@ -1374,7 +1384,7 @@ void SidebarClass::StripClass::Deactivate(void)
 {
     Map.Remove_A_Button(UpButton[ID]);
     Map.Remove_A_Button(DownButton[ID]);
-    for (int index = 0; index < MAX_VISIBLE; index++) {
+    for (int index = 0; index < Map.MaxVisible; index++) {
         Map.Remove_A_Button(SelectButton[ID][index]);
     }
 }
@@ -1468,7 +1478,7 @@ static int sortfunc(void const* ptr1, void const* ptr2)
  *=============================================================================================*/
 bool SidebarClass::StripClass::Add(RTTIType type, int id, bool via_capture)
 {
-    if (BuildableCount <= MAX_BUILDABLES) {
+    if (BuildableCount < MAX_BUILDABLES) {
         for (int index = 0; index < BuildableCount; index++) {
             if (Buildables[index].BuildableType == type && Buildables[index].BuildableID == id) {
                 return (false);
@@ -1512,36 +1522,13 @@ bool SidebarClass::StripClass::Add(RTTIType type, int id, bool via_capture)
  *=============================================================================================*/
 bool SidebarClass::StripClass::Scroll(bool up)
 {
-    if (up) {
-        Scroller--;
-    } else {
-        Scroller++;
-    }
-#ifdef NEVER
-    if (BuildableCount <= MAX_VISIBLE)
-        return (false);
-
-    /*
-    **	Top of list is moving toward lower ordered entries in the object list. It looks like
-    **	the "window" to the object list is moving up even though the actual object images are
-    **	scrolling downward.
-    */
-    if (up) {
-        if (!TopIndex)
-            return (false);
-
-        TopIndex--;
-        Slid = 0;
-    } else {
-        if (TopIndex + MAX_VISIBLE >= BuildableCount)
-            return (false);
-
-        Slid = ObjectHeight;
-    }
-    IsScrollingDown = !up;
-    IsScrolling = true;
-#endif
-    return (true);
+    int next = SidebarLayout::ScrollTop(TopIndex, BuildableCount, up);
+    if (next == TopIndex) return false;
+    TopIndex = next;
+    Scroller = Slid = 0;
+    IsScrolling = false;
+    Flag_To_Redraw();
+    return true;
 }
 
 /***********************************************************************************************
@@ -1602,65 +1589,6 @@ bool SidebarClass::StripClass::AI(KeyNumType& input, int, int)
     if (input == (DownButton[ID].ID | KN_BUTTON)) { // && !IsScrolling
         DownButton[ID].IsPressed = false;
         Scroll(false);
-    }
-
-    /*
-    **	Reflect the scroll desired direction/value into the scroll
-    **	logic handler. This might result in up or down scrolling.
-    */
-    if (!IsScrolling && Scroller) {
-        if (BuildableCount <= MAX_VISIBLE) {
-            Scroller = 0;
-        } else {
-
-            /*
-            **	Top of list is moving toward lower ordered entries in the object list. It looks like
-            **	the "window" to the object list is moving up even though the actual object images are
-            **	scrolling downward.
-            */
-            if (Scroller < 0) {
-                if (!TopIndex) {
-                    Scroller = 0;
-                } else {
-                    Scroller++;
-                    IsScrollingDown = false;
-                    IsScrolling = true;
-                    TopIndex--;
-                    Slid = 0;
-                }
-
-            } else {
-                if (TopIndex + MAX_VISIBLE >= BuildableCount) {
-                    Scroller = 0;
-                } else {
-                    Scroller--;
-                    Slid = ObjectHeight;
-                    IsScrollingDown = true;
-                    IsScrolling = true;
-                }
-            }
-        }
-    }
-
-    /*
-    **	Scroll logic is handled here.
-    */
-    if (IsScrolling) {
-        if (IsScrollingDown) {
-            Slid -= SCROLL_RATE;
-            if (Slid <= 0) {
-                IsScrolling = false;
-                Slid = 0;
-                TopIndex++;
-            }
-        } else {
-            Slid += SCROLL_RATE;
-            if (Slid >= ObjectHeight) {
-                IsScrolling = false;
-                Slid = 0;
-            }
-        }
-        redraw = true;
     }
 
     /*
@@ -1770,9 +1698,8 @@ void SidebarClass::StripClass::Draw_It(bool complete)
         /*
         ** New sidebar needs to be drawn not filled
         */
-        if (factor > 0 && BuildableCount < MAX_VISIBLE) {
-            CC_Draw_Shape(LogoShapes, ID, X + 3, Y - 1, WINDOW_MAIN, SHAPE_WIN_REL | SHAPE_NORMAL, 0);
-        }
+        LogicPage->Fill_Rect(X, Y - 1, X + StripWidth - 1,
+                             Y + SidebarLayout::ActiveRows() * ObjectHeight - 2, DKGREY);
 
         /*
         **	Redraw the scroll buttons.
@@ -1784,7 +1711,7 @@ void SidebarClass::StripClass::Draw_It(bool complete)
         **	Loop through all the buildable objects that are visible in the strip and render
         **	them. Their Y offset may be adjusted if the strip is in the process of scrolling.
         */
-        for (int i = 0; i < MAX_VISIBLE + (IsScrolling ? 1 : 0); i++) {
+        for (int i = 0; i < Map.MaxVisible; i++) {
             bool production;
             bool completed;
             int stage;
@@ -1794,8 +1721,8 @@ void SidebarClass::StripClass::Draw_It(bool complete)
             void const* remapper = 0;
             FactoryClass* factory = 0;
             int index = i + TopIndex;
-            int x = X;
-            int y = Y + i * ObjectHeight;
+            int x = X + SidebarLayout::Column(i) * (ObjectWidth + (1 << factor));
+            int y = Y + SidebarLayout::Row(i) * ObjectHeight;
             y--;
 
             /*
@@ -1918,6 +1845,19 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                 production = false;
             }
 
+            // Compose cameo and production overlays at their native resolution,
+            // then reduce them together so clocks and ready/hold labels stay aligned.
+            const int sourceWidth = OBJECT_WIDTH << factor;
+            const int sourceHeight = OBJECT_HEIGHT << factor;
+            static GraphicBufferClass cameo(OBJECT_WIDTH * 2, OBJECT_HEIGHT * 2);
+            GraphicViewPortClass* destination = Set_Logic_Page(cameo);
+            int savedWindow[9];
+            for (int w = 0; w < 9; ++w) savedWindow[w] = WindowList[WINDOW_SIDEBAR][w];
+            WindowList[WINDOW_SIDEBAR][WINDOWX] = 0;
+            WindowList[WINDOW_SIDEBAR][WINDOWY] = 0;
+            WindowList[WINDOW_SIDEBAR][WINDOWWIDTH] = sourceWidth;
+            WindowList[WINDOW_SIDEBAR][WINDOWHEIGHT] = sourceHeight;
+            cameo.Fill_Rect(0, 0, sourceWidth - 1, sourceHeight - 1, DKGREY);
             if (Get_Resolution_Factor()) {
                 remapper = 0;
             }
@@ -1931,12 +1871,17 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                 IsTheaterShape = (bool)factor; // This shape is theater specific
                 CC_Draw_Shape(shapefile,
                               shapenum,
-                              x - WindowList[WINDOW_SIDEBAR][WINDOWX] + LeftEdgeOffset,
-                              y - WindowList[WINDOW_SIDEBAR][WINDOWY],
+                              0,
+                              0,
                               WINDOW_SIDEBAR,
                               SHAPE_NORMAL | SHAPE_WIN_REL | (remapper ? SHAPE_FADING : SHAPE_NORMAL),
                               remapper);
                 IsTheaterShape = false;
+                if (index < BuildableCount && Buildables[index].BuildableType == RTTI_UNITTYPE && Buildables[index].BuildableID == UNIT_SIEGE_TANK) {
+                    cameo.Fill_Rect(0, sourceHeight - 14, sourceWidth - 1, sourceHeight - 1, BLACK);
+                    Fancy_Text_Print("SIEGE", sourceWidth / 2, sourceHeight - 13, WHITE, TBLACK, TPF_3POINT | TPF_CENTER);
+                    Fancy_Text_Print("TANK", sourceWidth / 2, sourceHeight - 7, WHITE, TBLACK, TPF_3POINT | TPF_CENTER);
+                }
 
                 /*
                 **	Darken this object because it cannot be produced or is otherwise
@@ -1945,8 +1890,8 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                 if (darken) {
                     CC_Draw_Shape(ClockShapes,
                                   0,
-                                  x - WindowList[WINDOW_SIDEBAR][WINDOWX] + LeftEdgeOffset,
-                                  y - WindowList[WINDOW_SIDEBAR][WINDOWY],
+                                  0,
+                                  0,
                                   WINDOW_SIDEBAR,
                                   SHAPE_NORMAL | SHAPE_WIN_REL | SHAPE_GHOST,
                                   NULL,
@@ -1966,8 +1911,8 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                     */
                     CC_Draw_Shape(ObjectTypeClass::PipShapes,
                                   PIP_READY,
-                                  (x - WindowList[WINDOW_SIDEBAR][WINDOWX]) + LeftEdgeOffset + (ObjectWidth >> 1),
-                                  (y - WindowList[WINDOW_SIDEBAR][WINDOWY]) + ObjectHeight
+                                  sourceWidth / 2,
+                                  sourceHeight
                                       - Get_Build_Frame_Height(ObjectTypeClass::PipShapes) - 8,
                                   WINDOW_SIDEBAR,
                                   SHAPE_CENTER);
@@ -1976,8 +1921,8 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                 } else {
                     CC_Draw_Shape(ClockShapes,
                                   stage + 1,
-                                  x - WindowList[WINDOW_SIDEBAR][WINDOWX] + LeftEdgeOffset,
-                                  y - WindowList[WINDOW_SIDEBAR][WINDOWY],
+                                  0,
+                                  0,
                                   WINDOW_SIDEBAR,
                                   SHAPE_NORMAL | SHAPE_WIN_REL | SHAPE_GHOST,
                                   NULL,
@@ -1989,8 +1934,8 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                     if (factory && !factory->Is_Building()) {
                         CC_Draw_Shape(ObjectTypeClass::PipShapes,
                                       PIP_HOLDING,
-                                      (x - WindowList[WINDOW_SIDEBAR][WINDOWX]) + LeftEdgeOffset + (ObjectWidth >> 1),
-                                      (y - WindowList[WINDOW_SIDEBAR][WINDOWY]) + ObjectHeight
+                                      sourceWidth / 2,
+                                      sourceHeight
                                           - Get_Build_Frame_Height(ObjectTypeClass::PipShapes)
                                           - 8, // Moved up now that icons have names on them
                                       WINDOW_SIDEBAR,
@@ -2000,6 +1945,13 @@ void SidebarClass::StripClass::Draw_It(bool complete)
                     }
                 }
             }
+            Set_Logic_Page(destination);
+            for (int w = 0; w < 9; ++w) WindowList[WINDOW_SIDEBAR][w] = savedWindow[w];
+            cameo.Scale(*destination, 0, 0, x + LeftEdgeOffset, y,
+                        sourceWidth, sourceHeight, ObjectWidth, ObjectHeight);
+            RenderLayers::Add_Detail(cameo, sourceWidth, sourceHeight, *destination,
+                                     x + LeftEdgeOffset, y, ObjectWidth, ObjectHeight);
+
         }
     }
 }
@@ -2040,7 +1992,7 @@ bool SidebarClass::StripClass::Recalc(void)
     for (int index = 0; index < BuildableCount; index++) {
         TechnoTypeClass const* tech = Fetch_Techno_Type(Buildables[index].BuildableType, Buildables[index].BuildableID);
         if (tech != NULL) {
-            ok = tech->Who_Can_Build_Me(true, false, PlayerPtr->Class->House) != NULL;
+            ok = Campaign_All_Tech_Type(tech,PlayerPtr) || tech->Who_Can_Build_Me(true, false, PlayerPtr->Class->House) != NULL;
         } else {
             switch (Buildables[index].BuildableID) {
             case SPC_ION_CANNON:
@@ -2187,8 +2139,8 @@ void SidebarClass::StripClass::SelectClass::Set_Owner(StripClass& strip, int ind
     int factor = Get_Resolution_Factor();
     Strip = &strip;
     Index = index;
-    X = strip.X;
-    Y = strip.Y + (index * (OBJECT_HEIGHT << factor));
+    X = strip.X + strip.LeftEdgeOffset + SidebarLayout::Column(index) * (strip.ObjectWidth + (1 << factor));
+    Y = strip.Y + SidebarLayout::Row(index) * strip.ObjectHeight - 1;
 }
 
 /***********************************************************************************************
@@ -2211,6 +2163,7 @@ void SidebarClass::StripClass::SelectClass::Set_Owner(StripClass& strip, int ind
 int SidebarClass::StripClass::SelectClass::Action(unsigned flags, KeyNumType& key)
 {
     int index = Strip->TopIndex + Index;
+    if (index < 0 || index >= Strip->BuildableCount) return false;
     RTTIType otype = Strip->Buildables[index].BuildableType;
     int oid = Strip->Buildables[index].BuildableID;
     int fnumber = Strip->Buildables[index].Factory;
@@ -2273,15 +2226,15 @@ int SidebarClass::StripClass::SelectClass::Action(unsigned flags, KeyNumType& ke
         if (flags & LEFTUP) {
             switch (spc) {
             case SPC_ION_CANNON:
-                Map.Help_Text(TXT_ION_CANNON, X, Y, CC_GREEN, true);
+                Map.Help_Text(TXT_ION_CANNON, Map.SideX - 2, Y, CC_GREEN, true);
                 break;
 
             case SPC_NUCLEAR_BOMB:
-                Map.Help_Text(TXT_NUKE_STRIKE, X, Y, CC_GREEN, true);
+                Map.Help_Text(TXT_NUKE_STRIKE, Map.SideX - 2, Y, CC_GREEN, true);
                 break;
 
             case SPC_AIR_STRIKE:
-                Map.Help_Text(TXT_AIR_STRIKE, X, Y, CC_GREEN, true);
+                Map.Help_Text(TXT_AIR_STRIKE, Map.SideX - 2, Y, CC_GREEN, true);
                 break;
             }
             flags &= ~LEFTUP;
@@ -2340,7 +2293,8 @@ int SidebarClass::StripClass::SelectClass::Action(unsigned flags, KeyNumType& ke
             **	Display the help text if the mouse is over the button.
             */
             if (flags & LEFTUP) {
-                Map.Help_Text(choice->Full_Name(), X, Y, CC_GREEN, true, choice->Cost_Of() * PlayerPtr->CostBias);
+                // Keep help outside both cameo categories so it cannot disable native detail.
+                Map.Help_Text(choice->Full_Name(), Map.SideX - 2, Y, CC_GREEN, true, choice->Cost_Of() * PlayerPtr->CostBias);
                 flags &= ~LEFTUP;
             }
 
@@ -2412,7 +2366,7 @@ int SidebarClass::StripClass::SelectClass::Action(unsigned flags, KeyNumType& ke
                                 Map.IsTargettingMode = true;
                             } else {
                                 BuildingClass* builder = pending->Who_Can_Build_Me(false, false);
-                                if (!builder) {
+                                if (!builder && !Campaign_All_Tech_Type(pending->Techno_Type_Class(),PlayerPtr)) {
                                     OutList.Add(EventClass(EventClass::ABANDON, otype, oid));
                                     Speak(VOX_NO_FACTORY);
                                 } else {
