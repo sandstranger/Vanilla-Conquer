@@ -60,6 +60,9 @@ template <class T> TFixedIHeapClass<T>::~TFixedIHeapClass(void)
 {
 }
 
+// (house.cpp's heap of build choices is not instantiated below: only its destructor, which is out of line now)
+template TFixedIHeapClass<HouseClass::BuildChoiceClass>::~TFixedIHeapClass(void);
+
 template class TFixedIHeapClass<AircraftClass>;
 template class TFixedIHeapClass<AircraftTypeClass>;
 template class TFixedIHeapClass<AnimClass>;
