@@ -158,6 +158,7 @@ public:
     virtual bool Scroll_Map(DirType facing, int& distance, bool really);
     virtual void Refresh_Cells(CELL cell, short const* list);
     virtual void Set_View_Dimensions(int x, int y, int width = -1, int height = -1);
+    void Apply_Map_Zoom(void); // (common/mapzoom.h)
 
     /*
     **	Pending object placement control.

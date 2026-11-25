@@ -1570,6 +1570,8 @@ bool Main_Loop()
     if (Get_Mouse_State())
         Show_Mouse();
 
+    Map.Apply_Map_Zoom(); // (a changed map zoom factor, common/mapzoom.h)
+
     /*
     ** Call the focus loss handler
     */

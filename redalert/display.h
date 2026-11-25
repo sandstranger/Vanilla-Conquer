@@ -167,6 +167,7 @@ public:
     virtual bool Scroll_Map(DirType facing, int& distance, bool really);
     virtual void Refresh_Cells(CELL cell, short const* list);
     virtual void Set_View_Dimensions(int x, int y, int width = -1, int height = -1);
+    void Apply_Map_Zoom(void); // (common/mapzoom.h)
 
     /*
     **	Pending object placement control.
@@ -353,5 +354,11 @@ private:
     *save/load
     */
 };
+
+/*
+**	The corner cell of a view that shows 'cell' about its middle: 8 rows and 10 columns back, half a full view - half
+**	the view with the map zoom (common/mapzoom.h).
+*/
+CELL View_Corner_Cell(CELL cell);
 
 #endif

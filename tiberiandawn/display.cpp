@@ -77,6 +77,7 @@
  *   DisplayClass::Prev_Object -- Searches for the previous object on the map.                 *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 #include "function.h"
+#include "common/mapzoom.h"
 #include "campaignexpansion.h"
 #include "campaignenemies.h"
 #include "campaignperks.h"
@@ -619,8 +620,47 @@ short const* DisplayClass::Text_Overlap_List(char const* text, int x, int y, int
  *   12/06/1994 JLB : Created.                                                                 *
  *   06/27/1995 JLB : Adjusts tactical map position if necessary.                              *
  *=============================================================================================*/
+/*
+** Map zoom (common/mapzoom.h): the last arguments of Set_View_Dimensions, to set the view again when the factor changes,
+** and what it applied
+*/
+static bool ZoomViewSet = false;
+static int ZoomViewX = 0, ZoomViewY = 0, ZoomViewW = -1, ZoomViewH = -1;
+static float ZoomApplied = 1.0f;
+static int ZoomLeptonWidth = 0, ZoomLeptonHeight = 0;
+
+/***********************************************************************************************
+ * DisplayClass::Apply_Map_Zoom -- Sets the view again when the map zoom factor changed.     *
+ *                                                                                             *
+ *    Called by the main loop. Also when the view was replaced (a savegame loaded).             *
+ *=============================================================================================*/
+void DisplayClass::Apply_Map_Zoom(void)
+{
+    if (ZoomViewSet
+        && (Map_Zoom_Factor() != ZoomApplied || int(TacLeptonWidth) != ZoomLeptonWidth
+            || int(TacLeptonHeight) != ZoomLeptonHeight)) {
+        /*
+        **	Keep what is in the middle of the view in the middle.
+        */
+        const int center_x = Coord_X(TacticalCoord) + TacLeptonWidth / 2;
+        const int center_y = Coord_Y(TacticalCoord) + TacLeptonHeight / 2;
+        Set_View_Dimensions(ZoomViewX, ZoomViewY, ZoomViewW, ZoomViewH);
+        int xx = center_x - TacLeptonWidth / 2 - (MapCellX * CELL_LEPTON_W);
+        int yy = center_y - TacLeptonHeight / 2 - (MapCellY * CELL_LEPTON_H);
+        Confine_Rect(
+            &xx, &yy, TacLeptonWidth, TacLeptonHeight, MapCellWidth * CELL_LEPTON_W, MapCellHeight * CELL_LEPTON_H);
+        Set_Tactical_Position(XY_Coord(xx + (MapCellX * CELL_LEPTON_W), yy + (MapCellY * CELL_LEPTON_H)));
+    }
+}
+
 void DisplayClass::Set_View_Dimensions(int x, int y, int width, int height)
 {
+    ZoomViewSet = true; // (for Apply_Map_Zoom)
+    ZoomViewX = x;
+    ZoomViewY = y;
+    ZoomViewW = width;
+    ZoomViewH = height;
+
 #ifdef REMASTER_BUILD
     // This code pulled in from RA1. ST - 1/9/2019 10:53AM
     if (width == -1) {
@@ -681,6 +721,27 @@ void DisplayClass::Set_View_Dimensions(int x, int y, int width, int height)
         height = SeenBuff.Get_Height() - y;
     }
     TacLeptonHeight = Pixel_To_Lepton(height);
+
+    /*
+    **	Map zoom (common/mapzoom.h): the view covers fewer cells, drawn in the top left part of the area, which the
+    **	video output magnifies over the whole area.
+    */
+    {
+        const int area_w = width;
+        const int area_h = height;
+        ZoomApplied = Map_Zoom_Factor();
+        if (ZoomApplied > 1.0f) {
+            width = int(area_w / ZoomApplied);
+            height = int(area_h / ZoomApplied);
+            width = width > CELL_PIXEL_W ? width : CELL_PIXEL_W;
+            height = height > CELL_PIXEL_H ? height : CELL_PIXEL_H;
+            TacLeptonWidth = Pixel_To_Lepton(width);
+            TacLeptonHeight = Pixel_To_Lepton(height);
+        }
+        ZoomLeptonWidth = TacLeptonWidth;
+        ZoomLeptonHeight = TacLeptonHeight;
+        Map_Zoom_Set_Area(x, y, area_w, area_h, width, height);
+    }
 
     /*
     **	Adjust the tactical cell if it is now in an invalid position

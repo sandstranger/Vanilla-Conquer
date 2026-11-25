@@ -1717,6 +1717,8 @@ bool Main_Loop()
     if (!GameActive)
         return (!GameActive);
 
+    Map.Apply_Map_Zoom(); // (a changed map zoom factor, common/mapzoom.h)
+
     /*
     ** Call the focus loss handler
     */
@@ -3551,8 +3553,7 @@ void Handle_View(int view, int action)
     if ((unsigned)view < ARRAY_SIZE(Scen.Views)) {
         if (action == 0) {
 
-            Map.Set_Tactical_Position(
-                Coord_Whole(Cell_Coord(Scen.Views[view] - (MAP_CELL_W * 4 * RESFACTOR) - (5 * RESFACTOR))));
+            Map.Set_Tactical_Position(Coord_Whole(Cell_Coord(View_Corner_Cell(Scen.Views[view]))));
 
             /*
             ** Win95 scrolling logic cant handle just jumps in screen position so redraw the lot.

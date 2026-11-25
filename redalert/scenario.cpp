@@ -606,8 +606,7 @@ void Fill_In_Data(void)
         Map.SidebarClass::Activate(1);
         //		if (Session.Type == GAME_NORMAL) {
         Scen.Views[0] = Scen.Views[1] = Scen.Views[2] = Scen.Views[3] = Scen.Waypoint[WAYPT_HOME];
-        Map.Set_Tactical_Position(
-            Cell_Coord((Scen.Waypoint[WAYPT_HOME] - (MAP_CELL_W * 4 * RESFACTOR)) - (5 * RESFACTOR)));
+        Map.Set_Tactical_Position(Cell_Coord(View_Corner_Cell(Scen.Waypoint[WAYPT_HOME])));
         //		}
     }
 

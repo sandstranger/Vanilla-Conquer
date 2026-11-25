@@ -86,6 +86,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "common/mapzoom.h"
 #include "vortex.h"
 #include "xpipe.h"
 #include "common/fading.h"
@@ -540,8 +541,53 @@ short const* DisplayClass::Text_Overlap_List(char const* text, int x, int y) con
  *   12/06/1994 JLB : Created.                                                                 *
  *   06/27/1995 JLB : Adjusts tactical map position if necessary.                              *
  *=============================================================================================*/
+/*
+** Map zoom (common/mapzoom.h): the last arguments of Set_View_Dimensions, to set the view again when the factor changes,
+** and what it applied
+*/
+static bool ZoomViewSet = false;
+static int ZoomViewX = 0, ZoomViewY = 0, ZoomViewW = -1, ZoomViewH = -1;
+static float ZoomApplied = 1.0f;
+static int ZoomLeptonWidth = 0, ZoomLeptonHeight = 0;
+
+/***********************************************************************************************
+ * DisplayClass::Apply_Map_Zoom -- Sets the view again when the map zoom factor changed.     *
+ *                                                                                             *
+ *    Called by the main loop. Also when the view was replaced (a savegame loaded).             *
+ *=============================================================================================*/
+CELL View_Corner_Cell(CELL cell)
+{
+    const float zoom = Map_Zoom_Factor();
+    return CELL(cell - (MAP_CELL_W * int(4 * RESFACTOR / zoom)) - int(5 * RESFACTOR / zoom));
+}
+
+void DisplayClass::Apply_Map_Zoom(void)
+{
+    if (ZoomViewSet
+        && (Map_Zoom_Factor() != ZoomApplied || int(TacLeptonWidth) != ZoomLeptonWidth
+            || int(TacLeptonHeight) != ZoomLeptonHeight)) {
+        /*
+        **	Keep what is in the middle of the view in the middle.
+        */
+        const int center_x = Coord_X(TacticalCoord) + TacLeptonWidth / 2;
+        const int center_y = Coord_Y(TacticalCoord) + TacLeptonHeight / 2;
+        Set_View_Dimensions(ZoomViewX, ZoomViewY, ZoomViewW, ZoomViewH);
+        int xx = center_x - TacLeptonWidth / 2 - (MapCellX * CELL_LEPTON_W);
+        int yy = center_y - TacLeptonHeight / 2 - (MapCellY * CELL_LEPTON_H);
+        Confine_Rect(
+            &xx, &yy, TacLeptonWidth, TacLeptonHeight, MapCellWidth * CELL_LEPTON_W, MapCellHeight * CELL_LEPTON_H);
+        Set_Tactical_Position(XY_Coord(xx + (MapCellX * CELL_LEPTON_W), yy + (MapCellY * CELL_LEPTON_H)));
+    }
+}
+
 void DisplayClass::Set_View_Dimensions(int x, int y, int width, int height)
 {
+    ZoomViewSet = true; // (for Apply_Map_Zoom)
+    ZoomViewX = x;
+    ZoomViewY = y;
+    ZoomViewW = width;
+    ZoomViewH = height;
+
     if (width == -1) {
         TacLeptonWidth = Pixel_To_Lepton(SeenBuff.Get_Width() - x);
     } else {
@@ -559,6 +605,24 @@ void DisplayClass::Set_View_Dimensions(int x, int y, int width, int height)
         TacLeptonHeight = height * CELL_LEPTON_H;
     }
     // TacLeptonHeight = height * CELL_LEPTON_H;
+
+    /*
+    **	Map zoom (common/mapzoom.h): the view covers fewer cells, drawn in the top left part of the area, which the
+    **	video output magnifies over the whole area.
+    */
+    {
+        const int area_w = Lepton_To_Pixel(TacLeptonWidth);
+        const int area_h = Lepton_To_Pixel(TacLeptonHeight);
+        ZoomApplied = Map_Zoom_Factor();
+        if (ZoomApplied > 1.0f) {
+            const int view_w = int(area_w / ZoomApplied), view_h = int(area_h / ZoomApplied);
+            TacLeptonWidth = Pixel_To_Lepton(view_w > CELL_PIXEL_W ? view_w : CELL_PIXEL_W);
+            TacLeptonHeight = Pixel_To_Lepton(view_h > CELL_PIXEL_H ? view_h : CELL_PIXEL_H);
+        }
+        ZoomLeptonWidth = TacLeptonWidth;
+        ZoomLeptonHeight = TacLeptonHeight;
+        Map_Zoom_Set_Area(x, y, area_w, area_h, Lepton_To_Pixel(TacLeptonWidth), Lepton_To_Pixel(TacLeptonHeight));
+    }
 
     /*
     **	Adjust the tactical cell if it is now in an invalid position
@@ -4771,7 +4835,7 @@ void DisplayClass::Read_INI(CCINIClass& ini)
     }
 
     Scen.Views[0] = Scen.Views[1] = Scen.Views[2] = Scen.Views[3] = Scen.Waypoint[WAYPT_HOME];
-    Set_Tactical_Position(Cell_Coord((Scen.Waypoint[WAYPT_HOME] - (MAP_CELL_W * 4 * RESFACTOR)) - (5 * RESFACTOR)));
+    Set_Tactical_Position(Cell_Coord(View_Corner_Cell(Scen.Waypoint[WAYPT_HOME])));
 
     /*
     **	Loop through all CellTrigger entries.

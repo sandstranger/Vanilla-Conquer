@@ -46,6 +46,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "common/mapzoom.h"
 #include "smoothmotion.h"
 
 #include "common/filepcx.h"
@@ -361,6 +362,8 @@ void GScreenClass::Remove_A_Button(GadgetClass& gadget)
  *=============================================================================================*/
 void GScreenClass::Render(void)
 {
+    Map_Zoom_Mark_Tactical_Frame(); // (the next frame shows the map: it may be magnified, common/mapzoom.h)
+
     // if (Buttons && Buttons->Is_List_To_Redraw()) {
     //	IsToRedraw = true;
     //}

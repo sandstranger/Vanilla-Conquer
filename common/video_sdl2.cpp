@@ -48,6 +48,7 @@
 #include <SDL.h>
 #include "renderlayers.h"
 #include "motioninterpolation.h"
+#include "mapzoom.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -72,6 +73,7 @@ static SDL_Renderer* renderer;
 static SDL_Palette* palette;
 static Uint32 pixel_format;
 static SDL_Rect render_dst;
+static void Render_Map_Zoom(SDL_Texture* tex, float tex_scale_x, float tex_scale_y, const int zoom[6]);
 
 static struct
 {
@@ -145,7 +147,7 @@ class SmoothCompositor
 public:
     ~SmoothCompositor() { Clear(); }
     void Clear() { if (texture) SDL_DestroyTexture(texture); texture=nullptr; }
-    bool Render()
+    bool Render(const int* zoom = nullptr)
     {
         const auto& frame=RenderLayers::frame;
         if (!frame.ready || !Settings.Video.SmoothMotion || frame.width<=0 || frame.height<=0) return false;
@@ -175,6 +177,7 @@ public:
         const auto& pixels=RenderLayers::Compose(width,height,colors,fraction);
         if (SDL_UpdateTexture(texture,nullptr,pixels.data(),width*4)!=0) return false;
         SDL_RenderCopy(renderer,texture,nullptr,&render_dst);
+        if (zoom) Render_Map_Zoom(texture, scale_x, scale_y, zoom);
         // Opt-in, bounded diagnostic trace of actual presentation calls, never simulation inputs.
         static FILE* trace = nullptr;
         static bool trace_checked = false;
@@ -644,7 +647,8 @@ void Move_Video_Mouse(float xrel, float yrel)
     }
 }
 
-void Get_Video_Mouse(int& x, int& y)
+// The pointer in game pixels on the screen (Get_Video_Mouse maps it into the magnified map, see mapzoom.h)
+static void Get_Video_Mouse_Screen(int& x, int& y)
 {
     if (Keyboard->Is_Gamepad_Active() || (Settings.Mouse.RawInput && (hwcursor.Clip || !Settings.Video.Windowed))) {
         x = hwcursor.X;
@@ -656,6 +660,24 @@ void Get_Video_Mouse(int& x, int& y)
         x /= scale_x;
         y /= scale_y;
     }
+}
+
+void Get_Video_Mouse(int& x, int& y)
+{
+    Get_Video_Mouse_Screen(x, y);
+    Map_Zoom_To_Game(x, y);
+}
+
+/*
+** The map zoom (mapzoom.h): the view, drawn in the top left part of the tactical area, magnified over the whole area.
+** tex_scale: the texture's pixels per game pixel.
+*/
+static void Render_Map_Zoom(SDL_Texture* tex, float tex_scale_x, float tex_scale_y, const int zoom[6])
+{
+    const float sx = float(render_dst.w) / hwcursor.GameW, sy = float(render_dst.h) / hwcursor.GameH;
+    const SDL_Rect src = {int(zoom[0] * tex_scale_x), int(zoom[1] * tex_scale_y), int(zoom[4] * tex_scale_x), int(zoom[5] * tex_scale_y)};
+    const SDL_FRect dst = {render_dst.x + zoom[0] * sx, render_dst.y + zoom[1] * sy, zoom[2] * sx, zoom[3] * sy};
+    SDL_RenderCopyF(renderer, tex, &src, &dst);
 }
 
 /***********************************************************************************************
@@ -1028,7 +1050,15 @@ public:
 
         SDL_UpdateTexture(texture, NULL, windowSurface->pixels, windowSurface->pitch);
         SDL_RenderClear(renderer);
-        if (!smooth_compositor.Render()) SDL_RenderCopy(renderer, texture, NULL, &render_dst);
+        int zoom[6];
+        const bool world_frame = Settings.Video.SmoothMotion && RenderLayers::frame.ready;
+        const bool zoomed = Map_Zoom_Begin_Frame(world_frame, zoom[0], zoom[1], zoom[2], zoom[3], zoom[4], zoom[5]);
+        if (!smooth_compositor.Render(zoomed ? zoom : nullptr)) {
+            SDL_RenderCopy(renderer, texture, NULL, &render_dst);
+            if (zoomed) {
+                Render_Map_Zoom(texture, 1.0f, 1.0f, zoom);
+            }
+        }
         RenderDetails();
         RenderCursor();
         SDL_RenderPresent(renderer);
@@ -1083,7 +1113,7 @@ private:
         if (!Settings.Video.HardwareCursor && !Get_Mouse_State() && hwcursor.Surface) {
             SDL_Texture* cursor = SDL_CreateTextureFromSurface(renderer, hwcursor.Surface);
             if (cursor) {
-                int x, y; Get_Video_Mouse(x, y);
+                int x, y; Get_Video_Mouse_Screen(x, y); // (where it is on the screen, not in the magnified map)
                 SDL_FRect dst = {render_dst.x + (x - hwcursor.HotX) * sx,
                                  render_dst.y + (y - hwcursor.HotY) * sy,
                                  hwcursor.Surface->w * sx, hwcursor.Surface->h * sy};

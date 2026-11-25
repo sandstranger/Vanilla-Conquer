@@ -18,6 +18,7 @@
 #include "video.h"
 #include "sdl_keymap.h"
 #include "settings.h"
+#include "mapzoom.h"
 #include <cmath>
 #include <SDL.h>
 
@@ -95,6 +96,7 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                 Get_Video_Scale(scale_x, scale_y);
                 x = event.button.x / scale_x;
                 y = event.button.y / scale_y;
+                Map_Zoom_To_Game(x, y); // (Get_Video_Mouse does it for the other branch)
             }
 
             Put_Mouse_Message(key, x, y, event.type == SDL_MOUSEBUTTONDOWN ? false : true);

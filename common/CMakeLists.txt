@@ -38,6 +38,7 @@ set(COMMON_SRC
     file.cpp
     filepcx.cpp
     fixed.cpp
+    mapzoom.cpp
     font.cpp
     gadget.cpp
     getshape.cpp
