@@ -856,7 +856,9 @@ template <class T> int VectorClass<T>::operator==(VectorClass<T> const& vector) 
  *=============================================================================================*/
 template <class T> inline int VectorClass<T>::ID(T const* ptr)
 {
-    return int((((uintptr_t)ptr - (uintptr_t) & (*this)[0]) / sizeof(T)));
+    // (the base through Vector itself: &(*this)[0] bound a reference to null while Resize constructed the elements of a
+    // vector that had none yet - RA's cells, whose constructor asks its ID; Init_Cells gives them the right ones later)
+    return int((((uintptr_t)ptr - (uintptr_t)Vector) / sizeof(T)));
 }
 
 /***********************************************************************************************

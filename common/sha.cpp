@@ -257,11 +257,13 @@ void SHAEngine::Process_Block(void const* source, SHADigest& acc) const
     **	Expand the source data into a large 80 * 32bit buffer. This is the working
     **	data that will be transformed by the secure hash algorithm.
     */
-    int32_t const* data = (int32_t const*)source;
+    // (byte addresses: through an int32_t* the compiler may take the source as aligned - armv7 faults on a paired load of
+    // a misaligned address - and it is not)
+    unsigned char const* data = (unsigned char const*)source;
     int index;
     for (index = 0; index < SRC_BLOCK_SIZE / sizeof(int32_t); index++) {
         int32_t x;
-        memcpy(&x, data + index, sizeof(int32_t));
+        memcpy(&x, data + index * sizeof(int32_t), sizeof(int32_t));
         block[index] = htobe32(x);
     }
 

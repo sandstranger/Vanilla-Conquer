@@ -9,39 +9,102 @@
 SettingsClass Settings;
 
 #if ANDROID
+#include <atomic>
+#include <mutex>
+
 extern SDL_Window* window;
-static bool g_onScreenControlsActive = true;
+static std::atomic<bool> g_onScreenControlsActive(true);
+
+/*
+** The launcher's settings, set through JNA on the java side's thread. The game's thread reads Settings without locks, and
+** SDL's relative mouse mode is the SDL thread's: the setters record the values, Apply_Launcher_Settings puts them into
+** Settings on the game's thread - at the start of SettingsClass::Load and whenever it polls its events. The last call
+** for a setting wins, as when the setters wrote Settings themselves.
+*/
+namespace
+{
+    struct LauncherSettings
+    {
+        bool hasDosMode = false, dosMode = false;
+        bool hasFrameLimit = false;
+        int frameLimit = 0;
+        bool hasSensitivity = false;
+        int sensitivity = 0;
+        bool hasPointerSpeed = false;
+        int pointerSpeed = 0;
+        bool hasRawInput = false, rawInput = false, rawInputToSdl = false;
+    };
+    std::mutex g_launcherMutex;
+    LauncherSettings g_launcherSettings;
+    std::atomic<bool> g_launcherSettingsPending(false);
+
+    template <typename F> void Set_Launcher_Setting(F set)
+    {
+        std::lock_guard<std::mutex> lock(g_launcherMutex);
+        set(g_launcherSettings);
+        g_launcherSettingsPending = true;
+    }
+}
+
+void Apply_Launcher_Settings()
+{
+    if (!g_launcherSettingsPending.exchange(false)) {
+        return;
+    }
+    LauncherSettings s;
+    {
+        std::lock_guard<std::mutex> lock(g_launcherMutex);
+        s = g_launcherSettings;
+        g_launcherSettings = LauncherSettings();
+    }
+    if (s.hasDosMode) {
+        Settings.Video.DOSMode = s.dosMode;
+    }
+    if (s.hasFrameLimit) {
+        Settings.Video.FrameLimit = s.frameLimit;
+    }
+    if (s.hasSensitivity) {
+        Settings.Mouse.Sensitivity = s.sensitivity;
+    }
+    if (s.hasPointerSpeed) {
+        Settings.Mouse.ControllerPointerSpeed = s.pointerSpeed;
+    }
+    if (s.hasRawInput) {
+        Settings.Mouse.RawInput = s.rawInput;
+        if (s.rawInputToSdl && window) {
+            SDL_SetRelativeMouseMode(s.rawInput ? SDL_TRUE : SDL_FALSE);
+        }
+    }
+}
 
 extern "C" {
+// The switches take an int: JNA passes a java 'boolean' as a 32 bit int.
 __attribute__((used)) __attribute__((visibility("default")))
-void setUseDoseModeState(const bool useDosMode) {
-    Settings.Video.DOSMode = useDosMode;
+void setUseDoseModeState(const int useDosMode) {
+    Set_Launcher_Setting([=](LauncherSettings& s) { s.hasDosMode = true; s.dosMode = useDosMode != 0; });
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void setFrameRateLimit(const int frameRateLimit) {
-    Settings.Video.FrameLimit = frameRateLimit;
+    Set_Launcher_Setting([=](LauncherSettings& s) { s.hasFrameLimit = true; s.frameLimit = frameRateLimit; });
 }
 __attribute__((used)) __attribute__((visibility("default")))
-void setOnScreenControlsState(const bool onScreenControlsActive) {
-    g_onScreenControlsActive = onScreenControlsActive;
+void setOnScreenControlsState(const int onScreenControlsActive) {
+    g_onScreenControlsActive = onScreenControlsActive != 0;
     if (onScreenControlsActive) {
-        Settings.Mouse.RawInput = false;
+        Set_Launcher_Setting([](LauncherSettings& s) { s.hasRawInput = true; s.rawInput = false; s.rawInputToSdl = false; });
     }
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void setMouseSensitivity(const int mouseSensitivity) {
-    Settings.Mouse.Sensitivity = mouseSensitivity;
+    Set_Launcher_Setting([=](LauncherSettings& s) { s.hasSensitivity = true; s.sensitivity = mouseSensitivity; });
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void setControllerPointerSpeed(const int controllerPointerSpeed ) {
-    Settings.Mouse.ControllerPointerSpeed = controllerPointerSpeed;
+    Set_Launcher_Setting([=](LauncherSettings& s) { s.hasPointerSpeed = true; s.pointerSpeed = controllerPointerSpeed; });
 }
 __attribute__((used)) __attribute__((visibility("default")))
-void updateRawInputState (const bool enableRawInput){
-    Settings.Mouse.RawInput = enableRawInput;
-    if (window){
-        SDL_SetRelativeMouseMode(enableRawInput ? SDL_TRUE : SDL_FALSE);
-    }
+void updateRawInputState (const int enableRawInput){
+    Set_Launcher_Setting([=](LauncherSettings& s) { s.hasRawInput = true; s.rawInput = enableRawInput != 0; s.rawInputToSdl = true; });
 }
 }
 #endif
@@ -100,6 +163,9 @@ SettingsClass::SettingsClass()
 void SettingsClass::Load(INIClass& ini)
 {
     char buf[128];
+#if ANDROID
+    Apply_Launcher_Settings(); // (what the launcher set before: then the ini, as when the setters wrote Settings)
+#endif
     Options.CampaignAllTech = ini.Get_Bool("Options", "CampaignAllTech", Options.CampaignAllTech);
 
     /*
@@ -139,7 +205,6 @@ void SettingsClass::Load(INIClass& ini)
     Video.FrameLimit = ini.Get_Int("Video", "FrameLimit", Video.FrameLimit);
     Video.HardwareCursor = ini.Get_Bool("Video", "HardwareCursor", Video.HardwareCursor);
     Video.DOSMode = ini.Get_Bool("Video", "DOSMode", Video.DOSMode);
-    Video.FrameLimit = g_frameRateLimit;
 #endif
     Video.GameWidth = Bound(ini.Get_Int("Video", "GameWidth", Video.GameWidth), 640, 1280);
     Video.GameHeight = Bound(ini.Get_Int("Video", "GameHeight", Video.GameHeight), 400, 800);

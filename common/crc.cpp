@@ -106,11 +106,14 @@ int32_t CRCEngine::operator()(void const* buffer, size_t length)
         **	Perform the fast 'bulk' processing by reading long word sized
         **	data blocks.
         */
-        int32_t const* longptr = (int32_t const*)dataptr;
+        // (byte addresses: through an int32_t* the compiler may take the data as aligned - armv7 faults on a paired load
+        // of a misaligned address - and it is not)
+        char const* longptr = dataptr;
         int longcount = bytes_left / sizeof(int32_t); // Whole 'long' elements remaining.
         while (longcount--) {
             int32_t l;
-            memcpy(&l, longptr++, sizeof(int32_t));
+            memcpy(&l, longptr, sizeof(int32_t));
+            longptr += sizeof(int32_t);
             CRC = lrotl(CRC, 1) + le32toh(l);
             bytes_left -= sizeof(int32_t);
         }

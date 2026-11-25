@@ -210,7 +210,10 @@ template <class T> class TFixedIHeapClass : public FixedIHeapClass
 public:
     TFixedIHeapClass(void)
         : FixedIHeapClass(sizeof(T)){};
-    virtual ~TFixedIHeapClass(void){};
+    // (out of line, in heap.cpp with the explicit instantiations: inline, every module that used a heap made its own
+    // destructor and the alias of the complete one to the base one, and a full LTO link failed - "Alias must point to a
+    // definition", an LLVM crash)
+    virtual ~TFixedIHeapClass(void);
 
     virtual int ID(T const* pointer) const
     {

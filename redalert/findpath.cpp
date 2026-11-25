@@ -255,7 +255,7 @@ bool FootClass::Unravel_Loop(PathType* path,
 #ifdef TEST
         path->Overlap[curr_pos >> 5] &= ~(1 << ((curr_pos & 31)));
 #else
-        path->Overlap[curr_pos >> 5] &= ~(1 << ((curr_pos & 31) - 1));
+        path->Overlap[curr_pos >> 5] &= ~(1u << (((curr_pos & 31) - 1) & 31));
 #endif
 
         /*
@@ -297,7 +297,7 @@ bool FootClass::Register_Cell(PathType* path, CELL cell, FacingType dir, int cos
 #ifdef TEST
     int bit = (cell & 31);
 #else
-    int bit = (cell & 31) - 1;
+    int bit = ((cell & 31) - 1) & 31; // (-1, a negative shift, for every 32nd cell: bit 31, as x86 shifts)
 #endif
 
     /*
@@ -305,7 +305,7 @@ bool FootClass::Register_Cell(PathType* path, CELL cell, FacingType dir, int cos
     ** we need to truncate the list back to this point and register the
     ** new direction.
     */
-    if (path->Overlap[pos] & (1 << bit)) {
+    if (path->Overlap[pos] & (1u << bit)) {
         /*
         ** If this is not a case of immediate back tracking then handle
         ** by searching the list to see what we find.  However is this is
@@ -320,7 +320,7 @@ bool FootClass::Register_Cell(PathType* path, CELL cell, FacingType dir, int cos
 #ifdef TEST
             path->Overlap[pos >> 5] &= ~(1 << ((pos & 31)));
 #else
-            path->Overlap[pos >> 5] &= ~(1 << ((pos & 31) - 1));
+            path->Overlap[pos >> 5] &= ~(1u << (((pos & 31) - 1) & 31));
 #endif
             path->Length--;
         } else {
@@ -375,7 +375,7 @@ bool FootClass::Register_Cell(PathType* path, CELL cell, FacingType dir, int cos
 #ifdef TEST
                 path->Overlap[pos >> 5] &= ~(1 << ((pos & 31)));
 #else
-                path->Overlap[pos >> 5] &= ~(1 << ((pos & 31) - 1));
+                path->Overlap[pos >> 5] &= ~(1u << (((pos & 31) - 1) & 31));
 #endif
                 idx++;
                 list++;
@@ -390,7 +390,7 @@ bool FootClass::Register_Cell(PathType* path, CELL cell, FacingType dir, int cos
         int cpos = path->Length++;
         path->Command[cpos] = dir;        // save of the direction we moved
         path->Cost += cost;               // figure new cost for cell
-        path->Overlap[pos] |= (1 << bit); // mark the we have entered point
+        path->Overlap[pos] |= (1u << bit); // mark the we have entered point
     }
     return (true);
 }
@@ -479,7 +479,7 @@ PathType* FootClass::Find_Path(CELL dest, FacingType* final_moves, int maxlen, M
 #ifdef TEST
     path.Overlap[source >> 5] |= (1 << ((source & 31)));
 #else
-    path.Overlap[source >> 5] |= (1 << ((source & 31) - 1));
+    path.Overlap[source >> 5] |= (1u << (((source & 31) - 1) & 31));
 #endif
 
     startcell = source;

@@ -51,6 +51,17 @@ public:
     } CryptControl;
 
     PKStraw(CryptControl control, RandomStraw& rnd);
+    /*
+    ** Unlinks the embedded blowfish straw. The straw it gets data from was left pointing here (Get_From links it back to
+    ** this object, not to BF): once this was gone, that straw's destructor called Get_From on it (ASan: stack use after
+    ** scope, in MixFileClass's constructor for every encrypted mixfile).
+    */
+    ~PKStraw()
+    {
+        Get_From(NULL);
+        BF.ChainFrom = NULL;
+        ChainTo = NULL;
+    }
 
     virtual void Get_From(Straw* straw);
     virtual void Get_From(Straw& straw)

@@ -631,6 +631,28 @@ bool RulesClass::Heap_Maximums(CCINIClass& ini)
     **	Any heaps that use the maximums that were just loaded, must
     **	be initialized as necessary.
     */
+    /*
+    **	A second rules file (AFTRMATH.INI, processed after RULES.INI) came here with the warheads and weapons already made.
+    **	Rebuilding their heaps freed them while every techno type still pointed at its weapons, and Objects() then read
+    **	the weapons' IDs through those pointers (ASan: heap use after free; scudo on android may have reused the memory).
+    **	They are made again in place, in the same slots with the same IDs: what the rebuild gave, with nothing freed.
+    */
+    if (Warheads.Count() > 0 && Warheads.Length() == WarheadMax && Weapons.Count() > 0 && Weapons.Length() == WeaponMax) {
+        for (int index = 0; index < Warheads.Count(); index++) {
+            WarheadTypeClass* warhead = Warheads.Ptr(index);
+            char const* name = warhead->Name();
+            warhead->~WarheadTypeClass();
+            new (warhead) WarheadTypeClass(name);
+        }
+        for (int index = 0; index < Weapons.Count(); index++) {
+            WeaponTypeClass* weapon = Weapons.Ptr(index);
+            char const* name = weapon->Name();
+            weapon->~WeaponTypeClass();
+            new (weapon) WeaponTypeClass(name);
+        }
+        return (true);
+    }
+
     Warheads.Set_Heap(WarheadMax);
     new WarheadTypeClass("SA");
     new WarheadTypeClass("HE");

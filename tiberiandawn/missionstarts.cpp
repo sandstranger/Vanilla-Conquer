@@ -1,6 +1,4 @@
 // Generate native, frame-zero mission saves using the game's normal loader/serializer.
-#include "function.h"
-#include "common/rawfile.h"
 #include <cstdio>
 #include <fstream>
 #include <string>
@@ -8,6 +6,8 @@
 #include <set>
 #include <cctype>
 #include <cstdlib>
+#include "function.h" // (after the standard headers: its macros break libstdc++'s <fstream>)
+#include "common/rawfile.h"
 
 bool Generate_Mission_Starts(const char* directory)
 {

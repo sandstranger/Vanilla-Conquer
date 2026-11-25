@@ -56,6 +56,10 @@
 #include <stddef.h>
 #include <string.h>
 
+template <class T> TFixedIHeapClass<T>::~TFixedIHeapClass(void)
+{
+}
+
 template class TFixedIHeapClass<AircraftClass>;
 template class TFixedIHeapClass<AircraftTypeClass>;
 template class TFixedIHeapClass<AnimClass>;

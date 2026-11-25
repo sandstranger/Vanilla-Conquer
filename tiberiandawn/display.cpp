@@ -248,8 +248,12 @@ void DisplayClass::One_Time(void)
                 Mem_Copy(FadingShade, RemapTables[hindex][fade], 256);
                 break;
             }
-            Mem_Copy(
-                &RemapTables[hindex][fade][((int)hindex + 11) * 16], &RemapTables[hindex][fade][(0 + 11) * 16], 16);
+            // (the range is past the row's 256 colours from the 6th house on: it read the next row, past the table for the
+            // last house. Those houses have no colour range there)
+            if (((int)hindex + 11) * 16 + 16 <= 256) {
+                Mem_Copy(
+                    &RemapTables[hindex][fade][((int)hindex + 11) * 16], &RemapTables[hindex][fade][(0 + 11) * 16], 16);
+            }
         }
     }
 }

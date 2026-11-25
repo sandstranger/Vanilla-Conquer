@@ -51,4 +51,9 @@ public:
 
 extern SettingsClass Settings;
 
+#if ANDROID
+// The settings the launcher set through JNA, put into Settings on the game's thread (see settings.cpp)
+void Apply_Launcher_Settings();
+#endif
+
 #endif

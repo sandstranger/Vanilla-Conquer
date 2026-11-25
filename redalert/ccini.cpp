@@ -1314,7 +1314,7 @@ int CCINIClass::Get_Buildings(char const* section, char const* entry, int defval
         while (token != NULL && *token != '\0') {
             StructType building = BuildingTypeClass::From_Name(token);
             if (building != STRUCT_NONE) {
-                pre |= (1L << building);
+                pre |= Scan_Bit(building);
             }
             token = strtok(NULL, ",");
         }

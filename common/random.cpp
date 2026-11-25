@@ -98,7 +98,7 @@ int RandomClass::operator()(void)
     **	Extract the 'random' bits from the seed and return that value as the
     **	random number result.
     */
-    return ((Seed >> THROW_AWAY_BITS) & (~((~0) << SIGNIFICANT_BITS)));
+    return ((Seed >> THROW_AWAY_BITS) & ((1u << SIGNIFICANT_BITS) - 1)); // (~((~0) << n): a shift of -1, undefined)
 }
 
 /***********************************************************************************************
@@ -160,7 +160,7 @@ int RandomClass::operator()(int minval, int maxval)
     **	Create a full bit mask pattern that has all bits set that just
     **	barely covers the magnitude of the number range desired.
     */
-    int mask = ~((~0L) << (highbit + 1));
+    int mask = (int)((1UL << (highbit + 1)) - 1); // (~((~0L) << n): a shift of -1, undefined)
 
     /*
     **	Keep picking random numbers until it fits within the magnitude desired.

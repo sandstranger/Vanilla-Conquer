@@ -54,12 +54,16 @@
 #include <cstring>
 
 #if ANDROID
+#include <atomic>
+#include <mutex>
 #include <string>
 using namespace std;
 
+// (set through JNA on the java side's thread, read on the game's)
+static std::mutex g_pathToSDLControllerDBMutex;
 static string g_pathToSDLControllerDB;
-static bool g_useGLES2_0 = false;
-static bool g_enableVsync = true;
+static std::atomic<bool> g_useGLES2_0(false);
+static std::atomic<bool> g_enableVsync(true);
 #endif
 
 extern WWKeyboardClass* Keyboard;
@@ -222,16 +226,17 @@ static void Update_HWCursor();
 #if ANDROID
 extern "C" {
 __attribute__((used)) __attribute__((visibility("default")))
-void setUseGLES2_0State(const bool useGLES2_0) {
-    g_useGLES2_0 = useGLES2_0;
+void setUseGLES2_0State(const int useGLES2_0) {   // (an int: JNA passes a java 'boolean' as a 32 bit int)
+    g_useGLES2_0 = useGLES2_0 != 0;
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void setPathToSDLControllerDB (const char *pathToSDLControllerDB){
-    g_pathToSDLControllerDB = pathToSDLControllerDB;
+    std::lock_guard<std::mutex> lock(g_pathToSDLControllerDBMutex);
+    g_pathToSDLControllerDB = pathToSDLControllerDB != nullptr ? pathToSDLControllerDB : ""; // (a string of null is undefined)
 }
 __attribute__((used)) __attribute__((visibility("default")))
-void setEnableVsyncState (const bool enableVsync){
-    g_enableVsync = enableVsync;
+void setEnableVsyncState (const int enableVsync){   // (an int: JNA passes a java 'boolean' as a 32 bit int)
+    g_enableVsync = enableVsync != 0;
 }
 }
 #endif
@@ -532,7 +537,12 @@ bool Set_Video_Mode(int w, int h, int bits_per_pixel)
     if (Settings.Mouse.ControllerEnabled) {
 #ifdef ANDROID
         SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
-        const auto pathToSdl2ControllerDb = g_pathToSDLControllerDB.c_str();
+        string pathToSdl2ControllerDbCopy;
+        {
+            std::lock_guard<std::mutex> lock(g_pathToSDLControllerDBMutex);
+            pathToSdl2ControllerDbCopy = g_pathToSDLControllerDB;
+        }
+        const auto pathToSdl2ControllerDb = pathToSdl2ControllerDbCopy.c_str();
         if (SDL_GameControllerAddMappingsFromFile(pathToSdl2ControllerDb) < 0) {
             SDL_Log("Couldn't load mappings: %s\n", SDL_GetError());
         } else{

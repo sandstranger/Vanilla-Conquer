@@ -401,11 +401,12 @@ int Buffer_Print(void* thisptr, const char* string, int x, int y, int fground, i
                 x += FontXSpacing + char_width;
                 int next_line = pitch - char_width;
                 unsigned short dlist;
-                memcpy(&dlist, datalist + char_num, sizeof(unsigned short));
+                // (byte addresses: through an unsigned short* the compiler may take them as aligned, they may be odd)
+                memcpy(&dlist, reinterpret_cast<const unsigned char*>(datalist) + char_num * sizeof(unsigned short), sizeof(unsigned short));
                 dlist = le16toh(dlist);
                 const unsigned char* char_data = reinterpret_cast<const unsigned char*>(FontPtr) + dlist;
                 short char_lle;
-                memcpy(&char_lle, linelist + char_num, sizeof(short));
+                memcpy(&char_lle, reinterpret_cast<const unsigned char*>(linelist) + char_num * sizeof(short), sizeof(short));
                 char_lle = le16toh(char_lle);
                 int char_ypos = char_lle & 0xFF;
                 int char_lines = char_lle >> 8;

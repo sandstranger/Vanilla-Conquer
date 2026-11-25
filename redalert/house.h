@@ -109,6 +109,17 @@ public:
     SourceType Edge;
 };
 
+/*
+**	The bit of an object type in the houses' 32 bit scan masks (BScan, UScan, ...) and in prerequisite masks. Types from
+**	32 up have none: 1L << type was undefined for them - x86-64 and arm64 shift by the count's low 6 bits, so a civilian
+**	building (type 83) set bit 19, another building's (taken as its prerequisite), while armv7, whose long is 32 bit,
+**	gave 0. Prerequisites only name types below 32.
+*/
+inline unsigned int Scan_Bit(int type)
+{
+    return ((unsigned)type < 32) ? (1u << type) : 0u;
+}
+
 /****************************************************************************
 **	Player control structure. Each player (computer or human) has one of
 **	these structures associated. These are located in a global array.

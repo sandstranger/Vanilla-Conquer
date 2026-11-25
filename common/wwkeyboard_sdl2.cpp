@@ -40,6 +40,10 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
 #endif
     SDL_Event event;
 
+#if ANDROID
+    Apply_Launcher_Settings(); // (what the launcher changed through JNA, see settings.cpp)
+#endif
+
     while (!Is_Buffer_Full() && SDL_PollEvent(&event)) {
         unsigned short key;
         switch (event.type) {
@@ -117,6 +121,17 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
                         Update_HWCursor_Settings();
                         break;
                 }
+                break; // (it fell through into SDL_MOUSEWHEEL: wheel.y is window.data2, a resize scrolled up)
+            /*
+            ** The lifecycle event watch (EventFilter) sees these first, on the java side's thread: what is the game's
+            ** is done here, on its thread.
+            */
+            case SDL_APP_WILLENTERBACKGROUND:
+                Focus_Loss();
+                break;
+            case SDL_APP_DIDENTERFOREGROUND:
+                Focus_Restore();
+                break;
 #endif
         case SDL_MOUSEWHEEL:
 #if ANDROID
@@ -176,16 +191,19 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
 #ifdef ANDROID
 extern void SetMute(bool mute);
 
+/*
+** SDL calls this on the java side's thread as the events are pushed: only the sound is paused and resumed here (OpenAL
+** Soft is thread safe). Focus_Loss/Focus_Restore - GameInFocus, the theme, the primary sound buffer, the map's redraw -
+** are the game's: Fill_Buffer_From_System calls them for the same events, on the game's thread.
+*/
 int SDLCALL EventFilter(void*, SDL_Event* event)
 {
     switch (event->type)
     {
         case SDL_APP_WILLENTERBACKGROUND:
-            Focus_Loss();
             SetMute(true);
             break;
         case SDL_APP_DIDENTERFOREGROUND:
-            Focus_Restore();
             SetMute(false);
             break;
     }

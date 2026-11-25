@@ -725,7 +725,10 @@ int Terrain_Cost(CELL cell, FacingType facing);
 /*
 **	Inline miscellaneous functions.
 */
-#define XYP_COORD(x, y) (unsigned)(((x)*ICON_LEPTON_W) / CELL_PIXEL_W + ((((y)*ICON_LEPTON_H) / CELL_PIXEL_H) << 16))
+// (the y part shifted as unsigned: a negative y, an offset upwards, was a left shift of a negative value - undefined; the
+// same bits)
+#define XYP_COORD(x, y)                                                                                                \
+    (unsigned)(((x)*ICON_LEPTON_W) / CELL_PIXEL_W + ((unsigned)(((y)*ICON_LEPTON_H) / CELL_PIXEL_H) << 16))
 
 inline int Cell_To_Lepton(int cell)
 {

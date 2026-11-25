@@ -56,6 +56,16 @@ public:
     } CryptControl;
 
     PKPipe(CryptControl control, RandomStraw& rnd);
+    /*
+    ** Unlinks the embedded blowfish pipe: the pipe it puts data to was left pointing at it, and Pipe's destructor calls
+    ** Put_To on what it points at (see PKStraw).
+    */
+    ~PKPipe()
+    {
+        Put_To(NULL);
+        BF.ChainFrom = NULL;
+        ChainTo = NULL;
+    }
 
     virtual void Put_To(Pipe* pipe);
     virtual void Put_To(Pipe& pipe)

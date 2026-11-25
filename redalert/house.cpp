@@ -3463,7 +3463,7 @@ bool HouseClass::Does_Enemy_Building_Exist(StructType btype) const
 {
     assert(Houses.ID(this) == ID);
 
-    int bflag = 1L << btype;
+    int bflag = Scan_Bit(btype);
     for (HousesType index = HOUSE_FIRST; index < HOUSE_COUNT; index++) {
         HouseClass* house = HouseClass::As_Pointer(index);
 
@@ -6732,7 +6732,7 @@ void HouseClass::Tracking_Add(TechnoClass const* techno)
         CurBuildings++;
         building = ((BuildingTypeClass const&)techno->Class_Of()).Type;
         BQuantity[building]++;
-        BScan |= (1L << building);
+        BScan |= Scan_Bit(building);
         if (Session.Type == GAME_INTERNET) {
             BuildingTotals.Increment_Unit_Total(techno->Class_Of().ID);
         }
@@ -6742,7 +6742,7 @@ void HouseClass::Tracking_Add(TechnoClass const* techno)
         CurAircraft++;
         aircraft = ((AircraftTypeClass const&)techno->Class_Of()).Type;
         AQuantity[aircraft]++;
-        AScan |= (1L << aircraft);
+        AScan |= Scan_Bit(aircraft);
         if (Session.Type == GAME_INTERNET) {
             AircraftTotals.Increment_Unit_Total(techno->Class_Of().ID);
         }
@@ -6763,7 +6763,7 @@ void HouseClass::Tracking_Add(TechnoClass const* techno)
             if (!((InfantryTypeClass const&)techno->Class_Of()).IsCivilian && Session.Type == GAME_INTERNET) {
                 InfantryTotals.Increment_Unit_Total(techno->Class_Of().ID);
             }
-            IScan |= (1L << infantry);
+            IScan |= Scan_Bit(infantry);
         }
         break;
 
@@ -6778,7 +6778,7 @@ void HouseClass::Tracking_Add(TechnoClass const* techno)
 #else
         UQuantity[unit]++;
 #endif
-        UScan |= (1L << unit);
+        UScan |= Scan_Bit(unit);
 #ifdef REMASTER_BUILD
         if (Session.Type == GAME_INTERNET) {
             UnitTotals.Increment_Unit_Total(techno->Class_Of().ID);
@@ -6797,7 +6797,7 @@ void HouseClass::Tracking_Add(TechnoClass const* techno)
 #else
         VQuantity[vessel]++;
 #endif
-        VScan |= (1L << vessel);
+        VScan |= Scan_Bit(vessel);
         if (Session.Type == GAME_INTERNET) {
             VesselTotals.Increment_Unit_Total(techno->Class_Of().ID);
         }
@@ -7042,56 +7042,56 @@ void HouseClass::Recalc_Attributes(void)
     */
     for (index = 0; index < Units.Count(); index++) {
         UnitClass const* unit = Units.Ptr(index);
-        unit->House->UScan |= (1L << unit->Class->Type);
+        unit->House->UScan |= Scan_Bit(unit->Class->Type);
         if (unit->IsLocked && (Session.Type != GAME_NORMAL || !unit->House->IsHuman || unit->IsDiscoveredByPlayer)) {
             if (!unit->IsInLimbo) {
-                unit->House->ActiveUScan |= (1L << unit->Class->Type);
+                unit->House->ActiveUScan |= Scan_Bit(unit->Class->Type);
             }
         }
     }
     for (index = 0; index < Infantry.Count(); index++) {
         InfantryClass const* infantry = Infantry.Ptr(index);
-        infantry->House->IScan |= (1L << infantry->Class->Type);
+        infantry->House->IScan |= Scan_Bit(infantry->Class->Type);
         if (infantry->IsLocked
             && (Session.Type != GAME_NORMAL || !infantry->House->IsHuman || infantry->IsDiscoveredByPlayer)) {
             if (!infantry->IsInLimbo) {
-                infantry->House->ActiveIScan |= (1L << infantry->Class->Type);
-                infantry->House->OldIScan |= (1L << infantry->Class->Type);
+                infantry->House->ActiveIScan |= Scan_Bit(infantry->Class->Type);
+                infantry->House->OldIScan |= Scan_Bit(infantry->Class->Type);
             }
         }
     }
     for (index = 0; index < Aircraft.Count(); index++) {
         AircraftClass const* aircraft = Aircraft.Ptr(index);
-        aircraft->House->AScan |= (1L << aircraft->Class->Type);
+        aircraft->House->AScan |= Scan_Bit(aircraft->Class->Type);
         if (aircraft->IsLocked
             && (Session.Type != GAME_NORMAL || !aircraft->House->IsHuman || aircraft->IsDiscoveredByPlayer)) {
             if (!aircraft->IsInLimbo) {
-                aircraft->House->ActiveAScan |= (1L << aircraft->Class->Type);
-                aircraft->House->OldAScan |= (1L << aircraft->Class->Type);
+                aircraft->House->ActiveAScan |= Scan_Bit(aircraft->Class->Type);
+                aircraft->House->OldAScan |= Scan_Bit(aircraft->Class->Type);
             }
         }
     }
     for (index = 0; index < Buildings.Count(); index++) {
         BuildingClass const* building = Buildings.Ptr(index);
         if (building->Class->Type < 32) {
-            building->House->BScan |= (1L << building->Class->Type);
+            building->House->BScan |= Scan_Bit(building->Class->Type);
             if (building->IsLocked
                 && (Session.Type != GAME_NORMAL || !building->House->IsHuman || building->IsDiscoveredByPlayer)) {
                 if (!building->IsInLimbo) {
-                    building->House->ActiveBScan |= (1L << building->Class->Type);
-                    building->House->OldBScan |= (1L << building->Class->Type);
+                    building->House->ActiveBScan |= Scan_Bit(building->Class->Type);
+                    building->House->OldBScan |= Scan_Bit(building->Class->Type);
                 }
             }
         }
     }
     for (index = 0; index < Vessels.Count(); index++) {
         VesselClass const* vessel = Vessels.Ptr(index);
-        vessel->House->VScan |= (1L << vessel->Class->Type);
+        vessel->House->VScan |= Scan_Bit(vessel->Class->Type);
         if (vessel->IsLocked
             && (Session.Type != GAME_NORMAL || !vessel->House->IsHuman || vessel->IsDiscoveredByPlayer)) {
             if (!vessel->IsInLimbo) {
-                vessel->House->ActiveVScan |= (1L << vessel->Class->Type);
-                vessel->House->OldVScan |= (1L << vessel->Class->Type);
+                vessel->House->ActiveVScan |= Scan_Bit(vessel->Class->Type);
+                vessel->House->OldVScan |= Scan_Bit(vessel->Class->Type);
             }
         }
     }
@@ -7357,6 +7357,9 @@ void HouseClass::Set_Factory(RTTIType rtti, FactoryClass* factory)
     }
 
     assert(factory_index != NULL);
+    if (factory_index == NULL) {
+        return; // (an RTTI without a factory slot: it wrote through a null pointer, an LTO trap)
+    }
 
     /*
     **	Assign the factory to the appropriate slot. For the case of clearing

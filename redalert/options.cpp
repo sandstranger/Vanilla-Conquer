@@ -69,7 +69,8 @@ char const* const OptionsClass::HotkeyName = "WinHotkeys";
 #endif
 
 #if ANDROID
-static int g_gameSpeed = 3;
+#include <atomic>
+static std::atomic<int> g_gameSpeed(3); // (set on the java side's thread)
 extern "C"{
 __attribute__((used)) __attribute__((visibility("default")))
 void setGameSpeed(const int gameSpeed) {

@@ -316,14 +316,15 @@ char* Extract_String(void const* data, int string)
     if (string >= 4567)
         return (InternetTxt[string - 4567]);
 
-    unsigned short int const* ptr = (unsigned short int const*)data;
+    // (byte addresses: through an unsigned short* the compiler may take them as aligned, the data may be odd)
+    unsigned char const* ptr = (unsigned char const*)data;
     memcpy(&ptr_0, ptr, sizeof(short));
     ptr_0 = le16toh(ptr_0);
     if (string >= (ptr_0 / 2)) {
         return nullptr;
     }
 
-    memcpy(&ptr_string, ptr + string, sizeof(short));
+    memcpy(&ptr_string, ptr + string * sizeof(short), sizeof(short));
     ptr_string = le16toh(ptr_string);
     return (((char*)data) + ptr_string);
 }

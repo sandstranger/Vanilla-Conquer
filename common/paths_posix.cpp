@@ -37,8 +37,17 @@
 #if ANDROID
 #include <string>
 
+#include <mutex>
 using namespace std;
+// (set through JNA on the java side's thread, read on the game's: as a copy, Android_Configs_Directory)
+static std::mutex g_pathToConfigsDirectoryMutex;
 static string g_pathToConfigsDirectory;
+
+static string Android_Configs_Directory()
+{
+    std::lock_guard<std::mutex> lock(g_pathToConfigsDirectoryMutex);
+    return g_pathToConfigsDirectory;
+}
 #endif
 
 #if defined(__APPLE__)
@@ -53,7 +62,8 @@ static string g_pathToConfigsDirectory;
 extern "C"{
 __attribute__((used)) __attribute__((visibility("default")))
 void setPathToConfigsDirectory (const char *pathToConfigsDirectory) {
-    g_pathToConfigsDirectory = pathToConfigsDirectory;
+    std::lock_guard<std::mutex> lock(g_pathToConfigsDirectoryMutex);
+    g_pathToConfigsDirectory = pathToConfigsDirectory != nullptr ? pathToConfigsDirectory : ""; // (a string of null is undefined)
 }
 }
 #endif
@@ -66,7 +76,7 @@ namespace
 
         if (_path.empty()) {
 #if ANDROID
-            _path = g_pathToConfigsDirectory;
+            _path = Android_Configs_Directory();
 #else
             int uid = getuid();
             const char* home_env = std::getenv("HOME");
@@ -220,7 +230,7 @@ const char* PathsClass::User_Path()
 #ifdef __APPLE__
         UserPath = User_Home() + "/Library/Application Support/Vanilla-Conquer";
 #elif ANDROID
-        UserPath = g_pathToConfigsDirectory;
+        UserPath = Android_Configs_Directory();
 #else
         UserPath = Get_Posix_Default("XDG_CONFIG_HOME", ".config") + "/vanilla-conquer";
 #endif

@@ -15,21 +15,25 @@
 #include <stdlib.h>
 #if ANDROID
 #include "alext.h"
+#include <atomic>
 
-static ALCdevice* openALDevice;
+// (SetMute runs on the java side's thread, see EventFilter: the device is atomic, cleared before it is closed - OpenAL Soft
+// checks a device it is given against its open ones)
+static std::atomic<ALCdevice*> openALDevice(nullptr);
 
 void SetMute(bool mute){
-    if (openALDevice == nullptr) {
+    ALCdevice* const device = openALDevice.load();
+    if (device == nullptr) {
         return;
     }
 
     if( mute )
     {
-        alcDevicePauseSOFT(openALDevice);
+        alcDevicePauseSOFT(device);
     }
     else
     {
-        alcDeviceResumeSOFT(openALDevice);
+        alcDeviceResumeSOFT(device);
     }
 }
 #endif

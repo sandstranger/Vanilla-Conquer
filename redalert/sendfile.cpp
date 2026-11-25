@@ -579,7 +579,14 @@ bool Send_Remote_File(char* file_name, int gametype)
 #ifdef FIXIT_VERSION_3
     //	If we're sending an official map, always send it to 'download.tmp'.
     if (Is_Mission_Counterstrike(file_name) || Is_Mission_Aftermath(file_name)) {
-        strcpy(&net_file_info.ScenarioInfo.ShortFileName[0], "DOWNLOAD.TMP");
+        // "DOWNLOAD.TMP" fills ShortFileName's 12 chars: strcpy put the terminator past it (undefined, a build error with
+        // the NDK's fortified strcpy), on the first byte of FileDigest, where receivers find it. The same bytes, in bounds:
+        memcpy(&net_file_info.ScenarioInfo.ShortFileName[0], "DOWNLOAD.TMP", sizeof(net_file_info.ScenarioInfo.ShortFileName));
+        if (sizeof(net_file_info.ScenarioInfo.ShortFileName) == 12) {
+            net_file_info.ScenarioInfo.FileDigest[0] = 0;
+        } else {
+            net_file_info.ScenarioInfo.ShortFileName[12] = 0;
+        }
     }
 #else
 #ifdef FIXIT_CSII //	checked - ajw 9/28/98

@@ -55,7 +55,10 @@ HINSTANCE ProgramInstance;
 #include "SDL_main.h"
 #include <string>
 
+#include <mutex>
 using namespace std;
+// (set through JNA on the java side's thread, read on the game's)
+static std::mutex g_pathToResourcesMutex;
 static string g_pathToResources;
 #endif
 
@@ -212,7 +215,10 @@ int main(int argc, char** argv)
 #endif
 {
 #if ANDROID
-    chdir(g_pathToResources.c_str());
+    {
+        std::lock_guard<std::mutex> lock(g_pathToResourcesMutex);
+        chdir(g_pathToResources.c_str());
+    }
 #endif
     UtfArgs args(argc, argv);
     CCDebugString("C&C95 - Starting up.\n");
@@ -638,21 +644,24 @@ void onNativeResume() {
 __attribute__((used)) __attribute__((visibility("default")))
 void onNativePause() {
 }
+// The queries return an int: JNA reads a java 'boolean' result as a 32 bit int, and of a returned C++ 'bool' only the
+// low byte is defined on arm64 (AAPCS64 leaves the rest of the register unspecified).
 __attribute__((used)) __attribute__((visibility("default")))
-bool needToShowScreenControls() {
-    return true;
+int needToShowScreenControls() {
+    return 1;
 }
 __attribute__((used)) __attribute__((visibility("default")))
-bool needToInvokeMouseButtonsEvents(){
-    return true;
+int needToInvokeMouseButtonsEvents(){
+    return 1;
 }
 __attribute__((used)) __attribute__((visibility("default")))
-bool needToReInitGameControllers (){
-    return false;
+int needToReInitGameControllers (){
+    return 0;
 }
 __attribute__((used)) __attribute__((visibility("default")))
 void setPathToResources (const char *pathToResource) {
-    g_pathToResources = pathToResource;
+    std::lock_guard<std::mutex> lock(g_pathToResourcesMutex);
+    g_pathToResources = pathToResource != nullptr ? pathToResource : ""; // (a string of null is undefined)
 }
 }
 #endif
